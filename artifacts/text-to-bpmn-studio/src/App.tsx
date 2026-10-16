@@ -6,6 +6,7 @@ import SpecExportButton from './components/SpecExportButton';
 import { generateBpmnXmlFromJson, mergeGraphs } from './utils/bpmnBuilder';
 import { MINIMAL_BPMN_XML, MOCK_ORDER_GRAPH, MOCK_REJECTION_GRAPH } from './utils/mockBpmn';
 import { generateSqlSchema } from './utils/generateSqlSchema';
+import { parseGeneratedGraph } from './utils/parseGeneratedGraph';
 
 type ChatMessage={sender:'ai'|'user';text:string};
 const GENERATION_ERROR_MESSAGE = 'Не удалось построить диаграмму. Попробуйте повторить запрос или сократить его';
@@ -56,7 +57,8 @@ export default function App(){
     setAiError('');setChatMessages([]);
     try{
       const result=await generate.mutateAsync({data:{description}});
-      const combined=hasGenerated?mergeGraphs(graph,result.graph):result.graph;
+      const generatedGraph=parseGeneratedGraph(result);
+      const combined=hasGenerated?mergeGraphs(graph,generatedGraph):generatedGraph;
       const xml=generateBpmnXmlFromJson(combined);
       setGraph(combined);setCurrentXml(xml);setHasGenerated(true);
       const task=combined.nodes.find(n=>n.type==='userTask'||n.type==='serviceTask')?.name||'этого этапа';

@@ -1,6 +1,7 @@
 import { Router, type IRouter, type Request } from "express";
 import { fetchGeminiWithRetry } from "../lib/gemini-request";
 import { BPMN_RESPONSE_FORMAT } from "../lib/bpmn-response-format";
+import { parseBpmnGraph } from "../lib/parse-bpmn-graph";
 import {
   GenerateBpmnBody,
   GenerateBpmnResponse,
@@ -128,19 +129,6 @@ async function callModel(
   return { content };
 }
 
-function parseJsonObject(text: string): unknown | null {
-  const cleaned = text.replace(/```[a-z]*\s*/gi, "").trim();
-  const start = cleaned.indexOf("{");
-  const end = cleaned.lastIndexOf("}");
-  if (start < 0 || end < start) return null;
-
-  try {
-    return JSON.parse(cleaned.slice(start, end + 1));
-  } catch {
-    return null;
-  }
-}
-
 router.post("/generate", async (req, res): Promise<void> => {
   const input = GenerateBpmnBody.safeParse(req.body);
   if (!input.success) {
@@ -161,8 +149,10 @@ router.post("/generate", async (req, res): Promise<void> => {
     return;
   }
 
-  const graph = parseJsonObject(result.content);
-  if (!graph) {
+  let graph: unknown;
+  try {
+    graph = parseBpmnGraph(result.content);
+  } catch {
     req.log.warn({ model: getAiModelName() }, "Gemini response was not a JSON graph");
     res.status(502).json({ error: "Gemini did not return a valid BPMN graph." });
     return;

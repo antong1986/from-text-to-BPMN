@@ -33,7 +33,7 @@ Turns written business-process descriptions into editable BPMN diagrams and tech
 
 - Frontend and API use same-origin `/api` routing so local and published use the same path and do not depend on a hardcoded backend URL.
 - Gemini requests and the API key stay server-side.
-- Keep the user's short graph prompt verbatim. Define the editor's required fields through structured JSON output instead: without that schema, the shortened prompt produced nodes missing `name`. Specification generation remains Markdown.
+- Use a compact graph prompt with a concrete JSON example and JSON-object mode. Normalize markdown fences and missing names before validation; missing names must not prevent rendering. Keep invalid IDs/references explicit errors rather than inventing graph structure. Specification generation remains Markdown.
 
 ## Product
 
