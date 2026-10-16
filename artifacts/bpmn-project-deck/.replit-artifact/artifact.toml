@@ -1,0 +1,28 @@
+kind = "slides"
+previewPath = "/bpmn-project-deck/"
+title = "Text-to-BPMN Studio — Project Overview"
+description = "Nine-slide project presentation covering the approved product workflow, pizza-order example, editing and exports, architecture, defensive parsing, and current limitations, using the Isometric 3D Data theme."
+version = "1.0.0"
+id = "artifacts/bpmn-project-deck"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/bpmn-project-deck/" ]
+localPort = 24538
+
+[services.development]
+run = "pnpm --filter @workspace/bpmn-project-deck run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/bpmn-project-deck", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/bpmn-project-deck/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "24538"
+BASE_PATH = "/bpmn-project-deck/"

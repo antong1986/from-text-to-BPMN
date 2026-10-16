@@ -1,0 +1,11 @@
+[
+  {"id":"d0c53166-eaf2-44ab-af27-64066f31cc11","position":1,"filepath":"src/pages/slides/ProjectCover.tsx","title":"Text-to-BPMN Studio","description":"Turn written process descriptions into editable BPMN diagrams and technical specifications.","speakerNotes":""},
+  {"id":"46e7a1ca-3375-4f3d-8c8b-425e31bccf22","position":2,"filepath":"src/pages/slides/ProcessLogic.tsx","title":"Make process logic explicit","description":"Why process descriptions benefit from visible steps and decisions.","speakerNotes":""},
+  {"id":"8d6b9bd6-2f2c-4c1f-abaf-7bc3cb7bf033","position":3,"filepath":"src/pages/slides/Workflow.tsx","title":"Describe. Generate. Review. Export.","description":"The five stages of the product workflow.","speakerNotes":""},
+  {"id":"a3ec29ab-5c99-47fe-93a7-0f720a2ce544","position":4,"filepath":"src/pages/slides/PizzaExample.tsx","title":"Example: a pizza-order process","description":"Illustrative pizza-order process with recognition, persistence, and a retry loop; not evidence of a live API response.","speakerNotes":""},
+  {"id":"d4387f39-d190-4aa3-98c0-5e1e16d0cf55","position":5,"filepath":"src/pages/slides/CanvasEditing.tsx","title":"A canvas built for process editing","description":"Editable BPMN elements and orthogonal flow routing.","speakerNotes":""},
+  {"id":"e1f64f27-98ca-46b3-8930-576dbe5aa066","position":6,"filepath":"src/pages/slides/DeliveryArtifacts.tsx","title":"From a diagram to delivery artifacts","description":"BPMN XML, SVG, SQL, Markdown, and Word outputs.","speakerNotes":""},
+  {"id":"110ca9fb-b8f7-4244-94b7-22fb14453d77","position":7,"filepath":"src/pages/slides/Architecture.tsx","title":"A clear frontend–backend boundary","description":"React frontend, Express backend, Gemini integration, and server-side credentials.","speakerNotes":""},
+  {"id":"7bf413ed-5af9-4fae-ad62-0a104db9d988","position":8,"filepath":"src/pages/slides/DefensiveParsing.tsx","title":"Defensive parsing, not silent failure","description":"Normalization, validation, bounded retries, and input preservation.","speakerNotes":""},
+  {"id":"e02fb91c-8f46-420b-aac4-a68d7f032a99","position":9,"filepath":"src/pages/slides/NextSteps.tsx","title":"A working prototype with clear next steps","description":"Current functionality, Gemini quota limitations, scripted review, and production preparation.","speakerNotes":""}
+]
