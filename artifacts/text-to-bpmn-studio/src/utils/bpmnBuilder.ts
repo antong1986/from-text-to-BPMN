@@ -1,4 +1,5 @@
 import type { BpmnEdge, BpmnGraph, BpmnNode } from '@workspace/api-client-react';
+import { BRANCH_ROW_HEIGHT, LOOP_CLEARANCE, LOOP_LANE_GAP, routeFlow, type NodeBounds } from './bpmnRouting.ts';
 
 const typeTag: Record<BpmnNode['type'], string> = {
   start: 'startEvent', end: 'endEvent', userTask: 'userTask', serviceTask: 'serviceTask', gateway: 'exclusiveGateway',
@@ -27,22 +28,35 @@ export function generateBpmnXmlFromJson(graph: BpmnGraph): string {
   const positions = new Map<string, {x:number;y:number}>();
   const visited = new Set<string>();
   const place = (id: string, x: number, row: number) => {
-    if (visited.has(id)) return; visited.add(id); positions.set(id, { x, y: 150 + row * 130 });
+    if (visited.has(id)) return; visited.add(id); positions.set(id, { x, y: 150 + row * BRANCH_ROW_HEIGHT });
     const outs = graph.edges.filter(e => e.from === id);
     outs.forEach((e, i) => place(e.to, x + 190, outs.length > 1 && i > 0 ? row + i : row));
   };
   const start = nodes.find(n => n.type === 'start') ?? nodes[0];
   place(start.id, 100, 0);
   nodes.forEach((n, i) => { if (!positions.has(n.id)) positions.set(n.id, { x: 100 + i * 190, y: 150 }); });
+  const nodeById = new Map(nodes.map(n => [n.id, n]));
+  const loopCount = graph.edges.filter(e => positions.get(e.to)!.x <= positions.get(e.from)!.x).length;
+  const minTop = Math.min(...nodes.map(n => positions.get(n.id)!.y - height(n) / 2));
+  const topPadding = Math.max(0, 20 + LOOP_CLEARANCE + Math.max(0, loopCount - 1) * LOOP_LANE_GAP - minTop);
+  if (topPadding) positions.forEach(p => { p.y += topPadding; });
+  const diagramTop = minTop + topPadding;
+  const bounds = new Map<string, NodeBounds>(nodes.map(n => {
+    const p = positions.get(n.id)!;
+    return [n.id, {x: p.x, y: p.y - height(n) / 2, width: width(n), height: height(n)}];
+  }));
   const shapeXml = nodes.map((n, i) => {
-    const p = positions.get(n.id)!; const w = width(n), h = height(n);
-    return `<bpmndi:BPMNShape id="Node_${i + 1}_di" bpmnElement="Node_${i + 1}"${n.type === 'gateway' ? ' isMarkerVisible="true"' : ''}><dc:Bounds x="${p.x}" y="${p.y - h / 2}" width="${w}" height="${h}" /></bpmndi:BPMNShape>`;
+    const b = bounds.get(n.id)!;
+    return `<bpmndi:BPMNShape id="Node_${i + 1}_di" bpmnElement="Node_${i + 1}"${n.type === 'gateway' ? ' isMarkerVisible="true"' : ''}><dc:Bounds x="${b.x}" y="${b.y}" width="${b.width}" height="${b.height}" /></bpmndi:BPMNShape>`;
   }).join('\n');
+  let loopLane = 0;
   const edgeXml = graph.edges.map((e, i) => {
-    const from = nodes.find(n => n.id === e.from)!; const to = nodes.find(n => n.id === e.to)!;
-    const p = positions.get(e.from)!, q = positions.get(e.to)!;
-    const x1 = p.x + width(from), y1 = p.y, x2 = q.x, y2 = q.y;
-    const points = y1 === y2 ? [[x1,y1],[x2,y2]] : [[p.x + width(from)/2,y1 + height(from)/2],[p.x + width(from)/2,q.y],[x2,q.y]];
+    const from = bounds.get(e.from)!, to = bounds.get(e.to)!;
+    const isReturn = to.x <= from.x;
+    const loopY = diagramTop - LOOP_CLEARANCE - (isReturn ? loopLane++ : 0) * LOOP_LANE_GAP;
+    const lowerGatewayBranch = nodeById.get(e.from)!.type === 'gateway' &&
+      to.y + to.height / 2 > from.y + from.height / 2;
+    const points = routeFlow(from, to, loopY, lowerGatewayBranch, e.from === e.to);
     return `<bpmndi:BPMNEdge id="${edgeIds[i]}_di" bpmnElement="${edgeIds[i]}">${points.map(([x,y]) => `<di:waypoint x="${x}" y="${y}" />`).join('')}</bpmndi:BPMNEdge>`;
   }).join('\n');
   const elementXml = nodes.map((n, i) => {
