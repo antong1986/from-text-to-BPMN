@@ -15,7 +15,7 @@ const router: IRouter = Router();
 
 const DEFAULT_AI_BASE_URL =
   "https://generativelanguage.googleapis.com/v1beta/openai";
-const DEFAULT_AI_MODEL_NAME = "gemini-3.6-flash";
+const DEFAULT_AI_MODEL_NAME = "gemini-3.1-pro-preview";
 const MAX_TOKENS = 16384;
 
 type ChatMessage = { role: "system" | "user"; content: string };

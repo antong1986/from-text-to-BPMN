@@ -47,7 +47,7 @@ Turns written business-process descriptions into editable BPMN diagrams and tech
 
 - Do not copy the uploaded archive's `.env` into the project; it contained a key that must be rotated.
 - The Google Gemini OpenAI-compatible base URL is `https://generativelanguage.googleapis.com/v1beta/openai`, not the generic `https://googleapis.com` host.
-- The requested Gemini 1.5 Flash model is no longer supported; the API artifact uses the current stable Flash model.
+- Gemini 1.5 models are no longer supported. The user chose `gemini-3.1-pro-preview` for complex specifications, with the preview status and potentially higher cost and latency explained.
 
 ## Pointers
 
