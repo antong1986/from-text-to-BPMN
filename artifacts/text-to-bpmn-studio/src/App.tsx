@@ -62,10 +62,8 @@ export default function App(){
       const question=QUESTIONS[Math.floor(Math.random()*QUESTIONS.length)].replace('{{task}}',task);
       setChatMessages([{sender:'ai',text:question}]);setChatInput('');setIsValidated(false);
       setIsScenarioFinished(false);setSqlSchema(null);
-    }catch(error){
-      const data = error && typeof error === 'object' && 'data' in error ? error.data : null;
-      const serverMessage = data && typeof data === 'object' && 'error' in data && typeof data.error === 'string' ? data.error : null;
-      setAiError(serverMessage ?? 'Не удалось построить диаграмму. Описание сохранено — попробуйте повторить запрос.');
+    }catch{
+      setAiError('Не удалось построить диаграмму. Попробуйте повторить запрос или сократить его');
     }
   };
   const handleReply=()=>{

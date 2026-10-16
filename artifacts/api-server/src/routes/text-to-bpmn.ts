@@ -59,7 +59,10 @@ async function callModel(
         model,
         max_tokens: MAX_TOKENS,
         messages,
-        ...(graphOutput ? { response_format: BPMN_RESPONSE_FORMAT } : {}),
+        ...(graphOutput ? {
+          response_format: BPMN_RESPONSE_FORMAT,
+          reasoning_effort: "low",
+        } : {}),
       }),
     }, {
       onRetry: (attempt, status) => req.log.warn(
