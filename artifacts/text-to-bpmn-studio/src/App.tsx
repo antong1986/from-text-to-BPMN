@@ -122,8 +122,9 @@ export default function App(){
         <div><div className="brand-title">Text-to-BPMN</div><div className="brand-caption">Студия моделирования процессов</div></div>
       </header>
       <section>
+        <div className="eyebrow" style={{marginBottom:5}}>ШАГ 01 · ОПИСАНИЕ</div>
         <div className="description-head">
-          <div><div className="eyebrow">ШАГ 01 · ОПИСАНИЕ</div><div className="section-title" style={{marginTop:5}}>Опишите бизнес-процесс</div></div>
+          <div className="section-title">Опишите бизнес-процесс</div>
           <button type="button" className="text-action" onClick={handleClearText} disabled={!hasTextToClear} title={hasTextToClear?'Очистить описание, чат и сообщение об ошибке':'Очищать пока нечего: все текстовые поля уже пусты'} data-testid="button-clear-text">Очистить текст</button>
         </div>
         <textarea className="description" value={userInput} onChange={e=>setUserInput(e.target.value)} placeholder="Например: Клиент отправляет заявку, менеджер проверяет её и, если всё корректно, передаёт в отдел исполнения…" data-testid="input-process-description" aria-label="Описание процесса"/>
