@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: text-to-bpmn
+    description: Generate BPMN process graphs and implementation specifications
 paths:
   /healthz:
     get:
@@ -24,6 +26,78 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /generate:
+    post:
+      operationId: generateBpmn
+      tags: [text-to-bpmn]
+      summary: Generate a BPMN graph from a process description
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BpmnGenerateInput"
+      responses:
+        "200":
+          description: Generated process graph
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BpmnGenerateResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: The AI provider returned an error or invalid graph
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: AI provider credentials are not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /generate-spec:
+    post:
+      operationId: generateSpec
+      tags: [text-to-bpmn]
+      summary: Generate a technical specification from a BPMN graph
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BpmnSpecInput"
+      responses:
+        "200":
+          description: Generated technical specification
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BpmnSpecResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: The AI provider returned an error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: AI provider credentials are not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +107,68 @@ components:
           type: string
       required:
         - status
+    BpmnGenerateInput:
+      type: object
+      properties:
+        description:
+          type: string
+          minLength: 1
+      required: [description]
+    BpmnNode:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum: [start, end, userTask, serviceTask, gateway]
+        name:
+          type: string
+      required: [id, type, name]
+    BpmnEdge:
+      type: object
+      properties:
+        from:
+          type: string
+        to:
+          type: string
+        condition:
+          type: string
+      required: [from, to]
+    BpmnGraph:
+      type: object
+      properties:
+        nodes:
+          type: array
+          items:
+            $ref: "#/components/schemas/BpmnNode"
+        edges:
+          type: array
+          items:
+            $ref: "#/components/schemas/BpmnEdge"
+      required: [nodes, edges]
+    BpmnGenerateResponse:
+      type: object
+      properties:
+        graph:
+          $ref: "#/components/schemas/BpmnGraph"
+      required: [graph]
+    BpmnSpecInput:
+      type: object
+      properties:
+        graph:
+          $ref: "#/components/schemas/BpmnGraph"
+      required: [graph]
+    BpmnSpecResponse:
+      type: object
+      properties:
+        spec:
+          type: string
+      required: [spec]
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
 

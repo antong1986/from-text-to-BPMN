@@ -1,44 +1,53 @@
-# [Project name]
+# Text-to-BPMN Studio
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+Turns written business-process descriptions into editable BPMN diagrams and technical specifications.
 
 ## Run & Operate
 
 - `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
+- `pnpm --filter @workspace/text-to-bpmn-studio run dev` — run the BPMN Studio web app
+- `pnpm --filter @workspace/text-to-bpmn-studio run typecheck` — check the web app
+- `pnpm --filter @workspace/api-server run typecheck` — check the API server
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+- Required secret: `AI_API_KEY` — Google Gemini key; store it in Replit Secrets, never in source or `.env`
+- Gemini endpoint and model are configured on the API Server artifact; the web app calls it through same-origin `/api` routes.
 
 ## Stack
 
 - pnpm workspaces, Node.js 24, TypeScript 5.9
+- Frontend: React, Vite, Tailwind CSS, bpmn-js
 - API: Express 5
-- DB: PostgreSQL + Drizzle ORM
-- Validation: Zod (`zod/v4`), `drizzle-zod`
+- Validation: Zod
 - API codegen: Orval (from OpenAPI spec)
 - Build: esbuild (CJS bundle)
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/text-to-bpmn-studio` — BPMN Studio frontend
+- `artifacts/api-server` — shared backend, including Gemini generation routes
+- `lib/api-spec/openapi.yaml` — source of truth for the API contract
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Frontend and API use same-origin `/api` routing so local and published use the same path and do not depend on a hardcoded backend URL.
+- Gemini requests and the API key stay server-side.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- Create BPMN diagrams from process descriptions, edit the diagram, and export BPMN XML, SVG, SQL schema, Markdown, and DOCX.
+- Generate a technical specification from the current process graph.
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+- Preserve the uploaded app's Russian-language interface and existing workflow.
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- Do not copy the uploaded archive's `.env` into the project; it contained a key that must be rotated.
+- The Google Gemini OpenAI-compatible base URL is `https://generativelanguage.googleapis.com/v1beta/openai`, not the generic `https://googleapis.com` host.
+- The requested Gemini 1.5 Flash model is no longer supported; the API artifact uses the current stable Flash model.
 
 ## Pointers
 

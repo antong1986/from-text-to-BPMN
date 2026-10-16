@@ -1,0 +1,25 @@
+@import "tailwindcss";
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+/* Холст bpmn-js должен занимать всю высоту контейнера */
+.bjs-container,
+.bjs-container .djs-container {
+  height: 100% !important;
+}
+
+/* Активные кнопки получают курсор-указатель; заблокированные его не меняют */
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]),
+[role="menuitem"]:not(:disabled) {
+  cursor: pointer;
+}

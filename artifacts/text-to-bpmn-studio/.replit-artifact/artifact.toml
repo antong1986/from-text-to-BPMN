@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Text-to-BPMN Studio"
+description = "A browser-based BPMN studio that turns written process descriptions into editable diagrams and implementation specifications using Gemini."
+version = "1.0.0"
+id = "artifacts/text-to-bpmn-studio"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 24162
+
+[services.development]
+run = "pnpm --filter @workspace/text-to-bpmn-studio run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/text-to-bpmn-studio", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/text-to-bpmn-studio/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "24162"
+BASE_PATH = "/"

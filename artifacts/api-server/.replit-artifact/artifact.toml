@@ -30,3 +30,7 @@ NODE_ENV = "production"
 
 [services.production.health.startup]
 path = "/api/healthz"
+
+[services.env]
+AI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai"
+AI_MODEL_NAME = "gemini-3.6-flash"
