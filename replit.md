@@ -43,6 +43,7 @@ Turns written business-process descriptions into editable BPMN diagrams and tech
 ## User preferences
 
 - Preserve the uploaded app's Russian-language interface and existing workflow.
+- Generation failures must display exactly: «Не удалось построить диаграмму. Попробуйте повторить запрос или сократить его». The user explicitly requested this and reported older technical wording still appearing.
 
 ## Gotchas
 

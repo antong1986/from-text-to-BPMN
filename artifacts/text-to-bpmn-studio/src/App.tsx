@@ -8,6 +8,7 @@ import { MINIMAL_BPMN_XML, MOCK_ORDER_GRAPH, MOCK_REJECTION_GRAPH } from './util
 import { generateSqlSchema } from './utils/generateSqlSchema';
 
 type ChatMessage={sender:'ai'|'user';text:string};
+const GENERATION_ERROR_MESSAGE = 'Не удалось построить диаграмму. Попробуйте повторить запрос или сократить его';
 const EXAMPLES=[
   {label:'Обработка заявки',text:'Клиент отправляет заявку. Менеджер проверяет её и, если данные корректны, система регистрирует заявку. Если данные неверны — клиенту отправляется отказ.'},
   {label:'Оформление заказа',text:'Покупатель оформляет заказ. Система проверяет наличие товара. Если товар есть, сотрудник собирает заказ и передаёт его курьеру. Если товара нет, система уведомляет клиента и отменяет заказ.'},
@@ -63,7 +64,7 @@ export default function App(){
       setChatMessages([{sender:'ai',text:question}]);setChatInput('');setIsValidated(false);
       setIsScenarioFinished(false);setSqlSchema(null);
     }catch{
-      setAiError('Не удалось построить диаграмму. Попробуйте повторить запрос или сократить его');
+      setAiError(GENERATION_ERROR_MESSAGE);
     }
   };
   const handleReply=()=>{
@@ -136,7 +137,7 @@ export default function App(){
           {busy?'ИИ проектирует процесс…':'Сгенерировать диаграмму'}
         </button>
         {busy&&<p className="generation-progress" role="status">Обрабатываем описание. При временном сбое Gemini запрос повторяется автоматически. Это может занять до двух минут.</p>}
-        {aiError&&<div className="error-box" role="alert" data-testid="status-generation-error">{aiError}</div>}
+        {aiError&&<div className="error-box" role="alert" data-testid="status-generation-error">{GENERATION_ERROR_MESSAGE}</div>}
       </section>
 
       <section className="chat-box" aria-label="Чат-валидатор">

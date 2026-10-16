@@ -80,11 +80,20 @@ export function extractGraphFromXml(xml: string): BpmnGraph {
 
 export function mergeGraphs(base: BpmnGraph, next: BpmnGraph): BpmnGraph {
   if (!base.nodes.length) return next;
+  validate(base);
+  validate(next);
   const oldNodes = base.nodes.map(n => ({...n})), oldEdges = [...base.edges];
   const terminals = oldNodes.filter(n => n.type === 'end');
   terminals.forEach(n => { n.type = 'userTask'; });
   const skip = next.nodes.find(n => n.type === 'start');
-  const nodeIds = new Map(next.nodes.map((n,i) => [n.id, `next_${i + 1}`]));
+  const usedIds = new Set(base.nodes.map(n => n.id));
+  let sequence = 1;
+  const nodeIds = new Map(next.nodes.map(n => {
+    while (usedIds.has(`next_${sequence}`)) sequence++;
+    const id = `next_${sequence++}`;
+    usedIds.add(id);
+    return [n.id, id];
+  }));
   const addNodes = next.nodes.filter(n => n !== skip).map(n => ({...n,id:nodeIds.get(n.id)!}));
   const entry = next.edges.find(e => e.from === skip?.id)?.to;
   const links: BpmnEdge[] = terminals.length && entry ? terminals.map(n => ({from:n.id,to:nodeIds.get(entry)!})) : [];
