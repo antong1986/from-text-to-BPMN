@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowRight, Check, CircleHelp, Network, RotateCcw, Send } from 'lucide-react';
+import { Check, CircleHelp, Network, Send } from 'lucide-react';
 import { useGenerateBpmn, type BpmnGraph } from '@workspace/api-client-react';
 import BPMNViewer from './components/BPMNViewer';
 import SpecExportButton from './components/SpecExportButton';
@@ -132,7 +132,7 @@ export default function App(){
           <button type="button" className="example-chip" onClick={()=>loadExample('order')} data-testid="button-example-order">Заказ · пример</button>
         </div>
         <button type="button" className="primary-btn" style={{width:'100%'}} onClick={()=>void handleGenerate()} disabled={busy||!userInput.trim()} data-testid="button-generate-bpmn">
-          {busy?<><span className="spin"/>ИИ проектирует процесс…</>:'Сгенерировать диаграмму'} {!busy&&<ArrowRight size={14} style={{verticalAlign:'-3px',marginLeft:5}}/>}
+          {busy?'ИИ проектирует процесс…':'Сгенерировать диаграмму'}
         </button>
         {aiError&&<div className="error-box" role="alert" data-testid="status-generation-error">{aiError}</div>}
       </section>
@@ -164,7 +164,7 @@ export default function App(){
       </header>
       <div className="canvas-wrap" data-testid="panel-bpmn-canvas">
         <BPMNViewer xml={currentXml}/>
-        <button type="button" className="canvas-clear" onClick={handleClearCanvas} disabled={!hasGenerated} data-testid="button-clear-canvas"><RotateCcw size={12} style={{verticalAlign:'-2px',marginRight:5}}/>Очистить холст</button>
+        <button type="button" className="canvas-clear" onClick={handleClearCanvas} disabled={!hasGenerated} data-testid="button-clear-canvas">Очистить холст</button>
       </div>
       <footer className="footer-note"><span data-testid="status-validation">{isValidated?<><Check size={11} style={{verticalAlign:'-2px',marginRight:4}}/>ЛОГИКА ПОДТВЕРЖДЕНА</>:'ОЖИДАЕТ ПРОВЕРКИ ВАЛИДАТОРОМ'}</span><span>ЧЕРТЁЖ BPMN 2.0</span></footer>
     </main>

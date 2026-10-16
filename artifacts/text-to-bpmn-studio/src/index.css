@@ -97,7 +97,7 @@ button:disabled { cursor: not-allowed; }
 .examples { display:flex; gap:7px; margin:11px 0 14px; }
 .example-chip { border:1px solid #d9e2df; background:#f3f7f5; color:#54756f; border-radius:999px; padding:5px 9px; font-size:10px; white-space:nowrap; }
 .example-chip:hover { background:#e6f0ec; }
-.primary-btn { min-height:40px; border:0; border-radius:10px; padding:0 15px; background:#26776c; color:#fff; font-size:12px; font-weight:700; letter-spacing:.01em; transition:background .18s,transform .18s; }
+.primary-btn { display:inline-flex; align-items:center; justify-content:center; text-align:center; min-height:40px; border:0; border-radius:10px; padding:0 15px; background:#26776c; color:#fff; font-size:12px; font-weight:700; letter-spacing:.01em; transition:background .18s,transform .18s; }
 .primary-btn:hover:not(:disabled) { background:#1e655b; transform:translateY(-1px); }
 .primary-btn:disabled { background:#d8dfdd; color:#8c9996; }
 .error-box { margin-top:11px; border:1px solid #e9c8bd; background:#fff3ef; border-radius:10px; padding:10px 12px; color:#9d493b; font-size:11px; line-height:1.5; }
@@ -137,7 +137,7 @@ button:disabled { cursor: not-allowed; }
 .bpmn-stage { position:absolute; inset:0; width:100%; height:100%; }
 .bpmn-host { position:absolute; inset:0; width:100%; height:100%; }
 .bpmn-host .bjs-container,.bpmn-host .djs-container { width:100%; height:100%!important; }
-.canvas-clear { position:absolute; left:16px; bottom:16px; z-index:5; border:1px solid #d9e0dd; border-radius:9px; padding:8px 11px; background:#ffffffed; color:#64716e; font-size:10px; box-shadow:0 3px 12px #1b3b3210; }
+.canvas-clear { position:absolute; left:16px; bottom:16px; z-index:5; display:inline-flex; align-items:center; justify-content:center; text-align:center; border:1px solid #d9e0dd; border-radius:9px; padding:8px 11px; background:#ffffffed; color:#64716e; font-size:10px; box-shadow:0 3px 12px #1b3b3210; }
 .canvas-clear:hover:not(:disabled) { color:#a34e40; border-color:#e4c6bd; }
 .canvas-clear:disabled { opacity:.5; }
 .export-float { position:absolute; z-index:5; left:50%; bottom:16px; transform:translateX(-50%); display:flex; gap:4px; border:1px solid #dce3e0; border-radius:11px; padding:5px; background:#fffefaed; box-shadow:0 5px 18px #19312e17; }
