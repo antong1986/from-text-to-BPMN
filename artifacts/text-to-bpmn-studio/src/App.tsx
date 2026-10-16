@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Check, CircleHelp, Network, Send } from 'lucide-react';
+import { Check, Network, Send } from 'lucide-react';
 import { useGenerateBpmn, type BpmnGraph } from '@workspace/api-client-react';
 import BPMNViewer from './components/BPMNViewer';
 import SpecExportButton from './components/SpecExportButton';
@@ -140,7 +140,7 @@ export default function App(){
 
       <section className="chat-box" aria-label="Чат-валидатор">
         <div className="chat-head">
-          <div className="chat-status"><span className={`status-dot ${hasAiMessage?'active':''}`}/><span>Чат-валидатор</span><CircleHelp size={13} color="#9aa6a2"/></div>
+          <div className="chat-status"><span className={`status-dot ${hasAiMessage?'active':''}`}/><span>Чат-валидатор</span></div>
           <button type="button" className="finish-btn" onClick={handleFinish} disabled={isScenarioFinished||chatMessages.length===0} title="Сценарий может быть завершен с ошибками" data-testid="button-finish-scenario">Завершить сценарий</button>
         </div>
         <div className="messages" data-testid="list-validator-messages">
