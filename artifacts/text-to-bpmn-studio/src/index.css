@@ -101,6 +101,7 @@ button:disabled { cursor: not-allowed; }
 .primary-btn { display:inline-flex; align-items:center; justify-content:center; text-align:center; min-height:40px; border:0; border-radius:10px; padding:0 15px; background:#26776c; color:#fff; font-size:12px; font-weight:700; letter-spacing:.01em; transition:background .18s,transform .18s; }
 .primary-btn:hover:not(:disabled) { background:#1e655b; transform:translateY(-1px); }
 .primary-btn:disabled { background:#d8dfdd; color:#8c9996; }
+.generation-progress { margin:10px 0 0; color:#536d65; font-size:11px; line-height:1.5; }
 .error-box { margin-top:11px; border:1px solid #e9c8bd; background:#fff3ef; border-radius:10px; padding:10px 12px; color:#9d493b; font-size:11px; line-height:1.5; }
 .chat-box { min-height:0; flex:1; display:flex; flex-direction:column; border:1px solid #dce2e0; border-radius:14px; background:#fff; overflow:hidden; }
 .chat-head { display:flex; align-items:center; justify-content:space-between; padding:13px 14px; border-bottom:1px solid #edf0ee; }

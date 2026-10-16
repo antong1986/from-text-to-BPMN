@@ -63,7 +63,9 @@ export default function App(){
       setChatMessages([{sender:'ai',text:question}]);setChatInput('');setIsValidated(false);
       setIsScenarioFinished(false);setSqlSchema(null);
     }catch(error){
-      setAiError(`Ошибка генерации структуры ИИ. Пожалуйста, попробуйте изменить описание${error instanceof Error&&error.message?`: ${error.message}`:''}`);
+      const data = error && typeof error === 'object' && 'data' in error ? error.data : null;
+      const serverMessage = data && typeof data === 'object' && 'error' in data && typeof data.error === 'string' ? data.error : null;
+      setAiError(serverMessage ?? 'Не удалось построить диаграмму. Описание сохранено — попробуйте повторить запрос.');
     }
   };
   const handleReply=()=>{
@@ -135,6 +137,7 @@ export default function App(){
         <button type="button" className="primary-btn" style={{width:'100%'}} onClick={()=>void handleGenerate()} disabled={busy||!userInput.trim()} data-testid="button-generate-bpmn">
           {busy?'ИИ проектирует процесс…':'Сгенерировать диаграмму'}
         </button>
+        {busy&&<p className="generation-progress" role="status">Обрабатываем описание. При временном сбое Gemini запрос повторяется автоматически. Это может занять до двух минут.</p>}
         {aiError&&<div className="error-box" role="alert" data-testid="status-generation-error">{aiError}</div>}
       </section>
 

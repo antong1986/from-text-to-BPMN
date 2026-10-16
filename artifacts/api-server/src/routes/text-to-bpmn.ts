@@ -1,4 +1,5 @@
 import { Router, type IRouter, type Request } from "express";
+import { fetchGeminiWithRetry } from "../lib/gemini-request";
 import {
   GenerateBpmnBody,
   GenerateBpmnResponse,
@@ -15,8 +16,7 @@ const router: IRouter = Router();
 const DEFAULT_AI_BASE_URL =
   "https://generativelanguage.googleapis.com/v1beta/openai";
 const DEFAULT_AI_MODEL_NAME = "gemini-3.6-flash";
-const MAX_TOKENS = 8192;
-const MODEL_TIMEOUT_MS = 60_000;
+const MAX_TOKENS = 16384;
 
 type ChatMessage = { role: "system" | "user"; content: string };
 type ModelResult =
@@ -47,7 +47,7 @@ async function callModel(
   let response: Response;
 
   try {
-    response = await fetch(`${getAiBaseUrl()}/chat/completions`, {
+    response = await fetchGeminiWithRetry(`${getAiBaseUrl()}/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -58,7 +58,10 @@ async function callModel(
         max_tokens: MAX_TOKENS,
         messages,
       }),
-      signal: AbortSignal.timeout(MODEL_TIMEOUT_MS),
+    }, {
+      onRetry: (attempt, status) => req.log.warn(
+        { model, attempt, status }, "Retrying a transient Gemini failure",
+      ),
     });
   } catch (error) {
     req.log.warn(
@@ -67,7 +70,7 @@ async function callModel(
     );
     return {
       status: 502,
-      error: "Gemini is unavailable. Check the AI endpoint and try again.",
+      error: "Не удалось дождаться ответа Gemini после повторных попыток. Описание сохранено — попробуйте ещё раз немного позже.",
     };
   }
 
@@ -75,7 +78,15 @@ async function callModel(
     req.log.warn({ model, status: response.status }, "Gemini returned an error");
     return {
       status: 502,
-      error: `Gemini returned HTTP ${response.status}. Check the configured model and API key.`,
+      error: response.status === 429
+        ? "Достигнут лимит запросов Gemini. Описание сохранено — повторите запрос позже или проверьте квоту Google."
+        : response.status >= 500
+          ? "Gemini временно недоступен. Автоматические повторные попытки не помогли. Описание сохранено — попробуйте немного позже."
+          : response.status === 401 || response.status === 403
+            ? "Gemini отклонил доступ. Администратору нужно проверить ключ API и разрешения Google."
+            : response.status === 400
+              ? "Gemini отклонил запрос. Возможно, описание превышает ограничения модели; попробуйте разделить процесс на части."
+              : "Gemini отклонил запрос. Администратору нужно проверить настройки модели.",
     };
   }
 
@@ -92,6 +103,16 @@ async function callModel(
       choices?: Array<{ message?: { content?: unknown } }>;
     }
   )?.choices?.[0]?.message?.content;
+
+  const finishReason = (payload as {
+    choices?: Array<{ finish_reason?: string }>;
+  })?.choices?.[0]?.finish_reason;
+  if (finishReason === "length") {
+    return {
+      status: 502,
+      error: "Ответ Gemini превысил лимит длины и был обрезан. Разделите процесс на части. Исходное описание сохранено.",
+    };
+  }
 
   if (typeof content !== "string" || !content.trim()) {
     req.log.warn({ model }, "Gemini response did not contain text");
