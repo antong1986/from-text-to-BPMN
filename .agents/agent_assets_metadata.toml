@@ -1,0 +1,30 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "T10igMIwG12vp6DbXjxUb"
+uri = "file://.local/outputs/Text-to-BPMN-Studio---Project-Overview.pptx"
+type = "slides"
+title = "Text-to-BPMN Studio (PPTX)"
+description = "Nine-slide project overview in PowerPoint format."
+logical_id = "09006a7b-8e53-4b64-81a6-2f034ee48260"
+content_hash = "sha256:0b499617c35d18fff4ed646f09cc05cb772d36034a4f9f4b3fb268bf6deb1eff"
+size = 3414424
+mtime_ms = 1792184395270
+storage_uri = "gcs://replit-rams-assets-archer/rams/assets/repl:3a898d12-0269-42a6-b0bf-82a308c18107/09006a7b-8e53-4b64-81a6-2f034ee48260/4ad1ffc7-898e-4819-af55-49bfa29c6b84"
+storage_version_token = "1792184399162268"
+content_type = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+
+[[outputs]]
+id = "-IvbhEr5BKDi_XzzPUjk4"
+uri = "file://.local/outputs/Text-to-BPMN-Studio---Project-Overview.pdf"
+type = "pdf"
+title = "Text-to-BPMN Studio (PDF)"
+description = "Nine-slide project overview in PDF format."
+logical_id = "da3724c3-3bf2-4bcf-a53b-031e29fe6eae"
+content_hash = "sha256:f28b5f11b0a1092126bdf30e49669ef5a4a0373bd920b38066f5cff4e696c874"
+size = 2704073
+mtime_ms = 1792184398190
+storage_uri = "gcs://replit-rams-assets-archer/rams/assets/repl:3a898d12-0269-42a6-b0bf-82a308c18107/da3724c3-3bf2-4bcf-a53b-031e29fe6eae/ee52f6e4-36ec-4e28-abf2-5b932ff7ad3a"
+storage_version_token = "1792184400021850"
+content_type = "application/pdf"
