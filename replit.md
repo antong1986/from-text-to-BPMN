@@ -33,6 +33,7 @@ Turns written business-process descriptions into editable BPMN diagrams and tech
 
 - Frontend and API use same-origin `/api` routing so local and published use the same path and do not depend on a hardcoded backend URL.
 - Gemini requests and the API key stay server-side.
+- Keep the user's short graph prompt verbatim. Define the editor's required fields through structured JSON output instead: without that schema, the shortened prompt produced nodes missing `name`. Specification generation remains Markdown.
 
 ## Product
 
@@ -47,7 +48,7 @@ Turns written business-process descriptions into editable BPMN diagrams and tech
 
 - Do not copy the uploaded archive's `.env` into the project; it contained a key that must be rotated.
 - The Google Gemini OpenAI-compatible base URL is `https://generativelanguage.googleapis.com/v1beta/openai`, not the generic `https://googleapis.com` host.
-- Gemini 1.5 models are no longer supported. The user chose `gemini-3.1-pro-preview` for complex specifications, with the preview status and potentially higher cost and latency explained.
+- Gemini 1.5 models are no longer supported. The user requested a temporary return to `gemini-3.6-flash` because `gemini-3.1-pro-preview` returned quota errors (429).
 
 ## Pointers
 

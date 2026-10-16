@@ -1,5 +1,6 @@
 import { Router, type IRouter, type Request } from "express";
 import { fetchGeminiWithRetry } from "../lib/gemini-request";
+import { BPMN_RESPONSE_FORMAT } from "../lib/bpmn-response-format";
 import {
   GenerateBpmnBody,
   GenerateBpmnResponse,
@@ -15,7 +16,7 @@ const router: IRouter = Router();
 
 const DEFAULT_AI_BASE_URL =
   "https://generativelanguage.googleapis.com/v1beta/openai";
-const DEFAULT_AI_MODEL_NAME = "gemini-3.1-pro-preview";
+const DEFAULT_AI_MODEL_NAME = "gemini-3.6-flash";
 const MAX_TOKENS = 16384;
 
 type ChatMessage = { role: "system" | "user"; content: string };
@@ -34,6 +35,7 @@ function getAiModelName(): string {
 async function callModel(
   messages: ChatMessage[],
   req: Request,
+  graphOutput = false,
 ): Promise<ModelResult> {
   const apiKey = process.env.AI_API_KEY;
   if (!apiKey) {
@@ -57,6 +59,7 @@ async function callModel(
         model,
         max_tokens: MAX_TOKENS,
         messages,
+        ...(graphOutput ? { response_format: BPMN_RESPONSE_FORMAT } : {}),
       }),
     }, {
       onRetry: (attempt, status) => req.log.warn(
@@ -148,6 +151,7 @@ router.post("/generate", async (req, res): Promise<void> => {
       { role: "user", content: input.data.description.trim() },
     ],
     req,
+    true,
   );
   if ("error" in result) {
     res.status(result.status).json({ error: result.error });
