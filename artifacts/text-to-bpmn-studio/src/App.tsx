@@ -164,12 +164,6 @@ export default function App(){
       </header>
       <div className="canvas-wrap" data-testid="panel-bpmn-canvas">
         <BPMNViewer xml={currentXml}/>
-        {!hasGenerated&&<div className="empty-overlay">
-          <div className="empty-card" data-testid="empty-bpmn-canvas">
-            <div className="empty-glyph">↳</div><strong>Процесс начинается с идеи</strong>
-            <p>Опишите последовательность действий слева — студия построит BPMN-диаграмму с узлами и связями.</p>
-          </div>
-        </div>}
         <button type="button" className="canvas-clear" onClick={handleClearCanvas} disabled={!hasGenerated} data-testid="button-clear-canvas"><RotateCcw size={12} style={{verticalAlign:'-2px',marginRight:5}}/>Очистить холст</button>
       </div>
       <footer className="footer-note"><span data-testid="status-validation">{isValidated?<><Check size={11} style={{verticalAlign:'-2px',marginRight:4}}/>ЛОГИКА ПОДТВЕРЖДЕНА</>:'ОЖИДАЕТ ПРОВЕРКИ ВАЛИДАТОРОМ'}</span><span>ЧЕРТЁЖ BPMN 2.0</span></footer>
