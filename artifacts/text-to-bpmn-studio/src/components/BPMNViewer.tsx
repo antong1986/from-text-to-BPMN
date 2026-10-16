@@ -32,7 +32,7 @@ export default function BPMNViewer({xml}:{xml:string}) {
     }catch{setExportError(kind==='xml'?'Не удалось выгрузить BPMN. Проверьте, что диаграмма построена.':'Не удалось выгрузить SVG. Проверьте, что диаграмма построена.');}
   };
   return <div className="bpmn-stage" data-testid="bpmn-stage">
-    <div ref={host} className="bjs-container" />
+    <div ref={host} className="bpmn-host" />
     {renderError&&<div className="render-alert" role="status" data-testid="status-render-error">{renderError}</div>}
     <div className="export-float">
       <button type="button" onClick={()=>void exportAs('xml')} data-testid="button-download-bpmn"><Download size={12}/> Скачать BPMN (XML)</button>

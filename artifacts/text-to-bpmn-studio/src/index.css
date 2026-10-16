@@ -134,7 +134,9 @@ button:disabled { cursor: not-allowed; }
 .secondary-btn:hover:not(:disabled) { background:#e8f1ed; }
 .secondary-btn:disabled { color:#aab3b1; background:#ecefed; }
 .canvas-wrap { position:relative; flex:1; min-height:0; overflow:hidden; border:1px solid #d5dedd; border-radius:16px; background-color:#fbfcfa; background-image:radial-gradient(#c7d3cf 0.7px, transparent 0.7px); background-size:19px 19px; box-shadow:0 12px 34px #3048450b; }
-.bpmn-stage,.bpmn-stage .djs-container { width:100%; height:100%!important; }
+.bpmn-stage { position:absolute; inset:0; width:100%; height:100%; }
+.bpmn-host { position:absolute; inset:0; width:100%; height:100%; }
+.bpmn-host .bjs-container,.bpmn-host .djs-container { width:100%; height:100%!important; }
 .canvas-clear { position:absolute; left:16px; bottom:16px; z-index:5; border:1px solid #d9e0dd; border-radius:9px; padding:8px 11px; background:#ffffffed; color:#64716e; font-size:10px; box-shadow:0 3px 12px #1b3b3210; }
 .canvas-clear:hover:not(:disabled) { color:#a34e40; border-color:#e4c6bd; }
 .canvas-clear:disabled { opacity:.5; }
