@@ -159,7 +159,10 @@ button:disabled { cursor: not-allowed; }
 .spec-menu { position:absolute; top:calc(100% + 7px); right:0; z-index:12; width:220px; padding:5px; border:1px solid #d9e1de; border-radius:10px; background:#fff; box-shadow:0 12px 28px #1f353020; }
 .spec-menu button { display:block; width:100%; border:0; border-radius:6px; padding:9px; background:#fff; text-align:left; color:#596763; font-size:11px; }
 .spec-menu button:hover { background:#eff5f1; }
-.spec-error { position:absolute; z-index:13; top:calc(100% + 7px); right:0; width:240px; padding:10px; border:1px solid #e7c8bd; border-radius:9px; background:#fff3ef; color:#9d493b; font-size:10px; }
+.spec-error { position:absolute; z-index:13; top:calc(100% + 7px); right:0; width:240px; padding:10px 36px 10px 10px; border:1px solid #e7c8bd; border-radius:9px; background:#fff3ef; color:#9d493b; font-size:10px; }
+.spec-error-close { position:absolute; top:4px; right:4px; display:flex; align-items:center; justify-content:center; width:28px; height:28px; padding:0; border:0; border-radius:5px; background:transparent; color:inherit; cursor:pointer; }
+.spec-error-close:hover { background:#9d493b14; }
+.spec-error-close:focus-visible { outline:2px solid currentColor; outline-offset:1px; }
 .spin { display:inline-block; width:13px;height:13px;border:2px solid #bed2cc;border-top-color:#27766b;border-radius:50%; animation:spin .7s linear infinite; vertical-align:-2px; margin-right:6px; }
 @keyframes spin { to { transform:rotate(360deg); } }
 @media (max-width: 900px) {

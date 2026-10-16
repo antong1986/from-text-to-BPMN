@@ -44,6 +44,7 @@ Turns written business-process descriptions into editable BPMN diagrams and tech
 
 - Preserve the uploaded app's Russian-language interface and existing workflow.
 - Generation failures must display exactly: «Не удалось построить диаграмму. Попробуйте повторить запрос или сократить его». The user explicitly requested this and reported older technical wording still appearing.
+- For the specification-generation error popup, use «Достигнут лимит запросов. Описание сохранено — повторите запрос позже.» and a dismiss (×) button. The user requested this specifically for the ТЗ popup, without raw HTTP errors.
 
 ## Gotchas
 
