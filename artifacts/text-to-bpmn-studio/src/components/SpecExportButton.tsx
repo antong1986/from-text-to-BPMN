@@ -35,9 +35,11 @@ export default function SpecExportButton({xml,disabled}:{xml:string;disabled:boo
     }catch{setError(SPEC_ERROR_MESSAGE);}
   };
   return <div ref={ref} style={{position:'relative'}}>
-    <button type="button" className="secondary-btn" disabled={disabled||specMutation.isPending} onClick={()=>setOpen(v=>!v)} aria-expanded={open} data-testid="button-generate-spec">
+    <span style={{display:'inline-flex'}} title={disabled?'Ответьте на вопрос ИИ-валидатора, чтобы подтвердить логику процесса':undefined}>
+    <button type="button" className="secondary-btn" style={disabled?{pointerEvents:'none'}:undefined} disabled={disabled||specMutation.isPending} onClick={()=>setOpen(v=>!v)} aria-expanded={open} data-testid="button-generate-spec">
       {specMutation.isPending?<><span className="spin"/>Аналитик пишет ТЗ…</>:<>Сгенерировать ТЗ <ChevronDown size={13}/></>}
     </button>
+    </span>
     {open&&!disabled&&<div className="spec-menu" role="menu" data-testid="menu-spec-export">
       <button type="button" role="menuitem" onClick={()=>void download('md')} data-testid="button-spec-markdown"><FileText size={13}/> Скачать в формате Markdown (.md)</button>
       <button type="button" role="menuitem" onClick={()=>void download('docx')} data-testid="button-spec-docx"><FileText size={13}/> Скачать в формате Word (.docx)</button>
