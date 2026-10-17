@@ -197,8 +197,8 @@ export default function App(){
       <header className="topbar">
         <div className="canvas-heading"><div className="canvas-icon"><Network size={16}/></div><div><div className="canvas-title">Холст диаграммы</div><div className="canvas-sub" data-testid="status-canvas-summary">{hasGenerated?`${graph.nodes.length} элементов · ${graph.edges.length} потоков`:'Готов к построению процесса'}</div></div></div>
         <div className="toolbar">
-          <button type="button" className="secondary-btn" disabled={!isValidated} onClick={()=>setSqlSchema(generateSqlSchema(currentXml))} title={!isValidated?'Ответьте на вопрос ИИ-валидатора, чтобы подтвердить логику процесса или завершите сценарий вручную':''} data-testid="button-generate-sql">Схема БД</button>
-          <SpecExportButton xml={currentXml} disabled={!isValidated}/>
+          <button type="button" className="secondary-btn" disabled={!isValidated} onClick={()=>setSqlSchema(generateSqlSchema(currentXml))} title={!isValidated&&hasGenerated?'Ответьте на вопрос ИИ-валидатора, чтобы подтвердить логику процесса или завершите сценарий вручную':undefined} data-testid="button-generate-sql">Схема БД</button>
+          <SpecExportButton xml={currentXml} disabled={!isValidated} hasDiagram={hasGenerated}/>
         </div>
       </header>
       <div className="canvas-wrap" data-testid="panel-bpmn-canvas">
