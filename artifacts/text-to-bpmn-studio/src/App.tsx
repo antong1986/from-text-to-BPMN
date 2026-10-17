@@ -4,7 +4,7 @@ import { useGenerateBpmn, useRefineBpmn, type BpmnGraph } from '@workspace/api-c
 import BPMNViewer from './components/BPMNViewer';
 import SpecExportButton from './components/SpecExportButton';
 import { generateBpmnXmlFromJson, mergeGraphs } from './utils/bpmnBuilder';
-import { MINIMAL_BPMN_XML, MOCK_ORDER_GRAPH, MOCK_REJECTION_GRAPH } from './utils/mockBpmn';
+import { MINIMAL_BPMN_XML } from './utils/mockBpmn';
 import { generateSqlSchema } from './utils/generateSqlSchema';
 import { parseGeneratedGraph } from './utils/parseGeneratedGraph';
 
@@ -18,10 +18,6 @@ type DiagramSnapshot={
   sqlSchema:string|null;
 };
 const GENERATION_ERROR_MESSAGE = 'Не удалось построить диаграмму: модель перегружена. Попробуйте повторить запрос позже.';
-const EXAMPLES=[
-  {label:'Обработка заявки',text:'Клиент отправляет заявку. Менеджер проверяет её и, если данные корректны, система регистрирует заявку. Если данные неверны — клиенту отправляется отказ.'},
-  {label:'Оформление заказа',text:'Покупатель оформляет заказ. Система проверяет наличие товара. Если товар есть, сотрудник собирает заказ и передаёт его курьеру. Если товара нет, система уведомляет клиента и отменяет заказ.'},
-];
 const QUESTIONS=[
   'Я построил базовый процесс. Что должно произойти, если на этапе «{{task}}» возникнет ошибка или отказ: завершить процесс или отправить уведомление клиенту?',
   'Схема готова. Требуется ли на шаге «{{task}}» дополнительная проверка данных перед переходом к следующему этапу?',
@@ -149,14 +145,6 @@ export default function App(){
     setCurrentXml(MINIMAL_BPMN_XML);setGraph({nodes:[],edges:[]});setHasGenerated(false);setChatMessages([]);
     setChatInput('');setIsValidated(false);setIsScenarioFinished(false);setSqlSchema(null);setRollbackSnapshot(null);setIsReplyPending(false);
   };
-  const loadExample=(kind:'application'|'order')=>{
-    replyRequestId.current+=1;
-    const sample=kind==='application'?MOCK_REJECTION_GRAPH:MOCK_ORDER_GRAPH;
-    setUserInput(kind==='application'?EXAMPLES[0].text:EXAMPLES[1].text);
-    setGraph(sample);setCurrentXml(generateBpmnXmlFromJson(sample));setHasGenerated(true);
-    setChatMessages([{sender:'ai',text:'Посмотрите на развилку процесса. Что нужно сделать при отказе или отсутствии товара?'}]);
-    setIsValidated(false);setIsScenarioFinished(false);setAiError('');setRollbackSnapshot(null);setIsReplyPending(false);
-  };
   const copySql=async()=>{
     if(!sqlSchema)return;
     try{
@@ -180,10 +168,6 @@ export default function App(){
           <button type="button" className="text-action" onClick={handleClearText} disabled={!hasTextToClear} title={hasTextToClear?'Очистить описание, чат и сообщение об ошибке':'Очищать пока нечего: все текстовые поля уже пусты'} data-testid="button-clear-text">Очистить текст</button>
         </div>
         <textarea className="description" value={userInput} onChange={e=>setUserInput(e.target.value)} placeholder="Например: Клиент отправляет заявку, менеджер проверяет её и, если всё корректно, передаёт в отдел исполнения…" data-testid="input-process-description" aria-label="Описание процесса"/>
-        <div className="examples">
-          <button type="button" className="example-chip" onClick={()=>loadExample('application')} data-testid="button-example-application">Заявка · пример</button>
-          <button type="button" className="example-chip" onClick={()=>loadExample('order')} data-testid="button-example-order">Заказ · пример</button>
-        </div>
         <button type="button" className="primary-btn" style={{width:'100%'}} onClick={()=>void handleGenerate()} disabled={busy||!userInput.trim()} data-testid="button-generate-bpmn">
           {busy?'ИИ проектирует процесс…':'Сгенерировать диаграмму'}
         </button>
