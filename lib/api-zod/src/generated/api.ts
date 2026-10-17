@@ -44,6 +44,30 @@ export const GenerateBpmnResponse = zod.object({
 
 
 /**
+ * @summary Extract a process description from a document and generate its BPMN graph
+ */
+export const UploadDocumentBody = zod.object({
+  "file": zod.instanceof(Blob)
+})
+
+export const UploadDocumentResponse = zod.object({
+  "description": zod.string(),
+  "graph": zod.object({
+  "nodes": zod.array(zod.object({
+  "id": zod.string(),
+  "type": zod.enum(['start', 'end', 'userTask', 'serviceTask', 'gateway']),
+  "name": zod.string()
+})),
+  "edges": zod.array(zod.object({
+  "from": zod.string(),
+  "to": zod.string(),
+  "condition": zod.string().optional()
+}))
+})
+})
+
+
+/**
  * @summary Apply a clarification to an existing BPMN graph
  */
 

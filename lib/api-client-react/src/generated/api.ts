@@ -26,6 +26,8 @@ import type {
   BpmnRefineResponse,
   BpmnSpecInput,
   BpmnSpecResponse,
+  DocumentUploadInput,
+  DocumentUploadResponse,
   ErrorResponse,
   HealthStatus
 } from './api.schemas';
@@ -221,6 +223,82 @@ export const useGenerateBpmn = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getGenerateBpmnMutationOptions(options));
+    }
+
+export const getUploadDocumentUrl = () => {
+
+
+
+
+  return `/api/upload-document`
+}
+
+/**
+ * @summary Extract a process description from a document and generate its BPMN graph
+ */
+export const uploadDocument = async (documentUploadInput: DocumentUploadInput, options?: Parameters<typeof customFetch>[1]): Promise<DocumentUploadResponse> => {
+    const formData = new FormData();
+formData.append(`file`, documentUploadInput.file);
+
+  return customFetch<DocumentUploadResponse>(getUploadDocumentUrl(),
+  {
+    ...options,
+    method: 'POST'
+    ,
+    body: formData
+  }
+);}
+
+
+
+
+
+export const getUploadDocumentMutationKey = () => ['uploadDocument'] as const;
+
+export const getUploadDocumentMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof uploadDocument>>, TError,UploadDocumentMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof uploadDocument>>, TError,UploadDocumentMutationVariables, TContext> => {
+
+const mutationKey = getUploadDocumentMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof uploadDocument>>, UploadDocumentMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  uploadDocument(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UploadDocumentMutationResult = NonNullable<Awaited<ReturnType<typeof uploadDocument>>>
+    export type UploadDocumentMutationBody = BodyType<DocumentUploadInput>
+    export type UploadDocumentMutationError = ErrorType<ErrorResponse>
+    export type UploadDocumentMutationVariables = {data: BodyType<DocumentUploadInput>}
+
+    /**
+ * @summary Extract a process description from a document and generate its BPMN graph
+ */
+export const useUploadDocument = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof uploadDocument>>, TError,UploadDocumentMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof uploadDocument>>,
+        TError,
+        UploadDocumentMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUploadDocumentMutationOptions(options));
     }
 
 export const getRefineBpmnUrl = () => {

@@ -95,6 +95,11 @@ button:disabled { cursor: not-allowed; }
 .description { width:100%; min-height:150px; resize:vertical; border:1px solid #d8dfdd; border-radius:12px; padding:13px 14px; background:#fff; color:#29383c; font-size:12px; line-height:1.65; outline:none; transition:border-color .18s, box-shadow .18s; }
 .description:focus,.chat-input:focus { border-color:#5a9a8e; box-shadow:0 0 0 3px #dcece6; }
 .description::placeholder { color:#a0a9a8; }
+.description-import-row { display:flex; align-items:center; gap:8px; margin:-3px 0 8px; }
+.import-btn { display:inline-flex; align-items:center; justify-content:center; gap:6px; border:1px solid #d8dfdd; border-radius:8px; padding:6px 9px; background:#fff; color:#54756f; font-size:11px; transition:background .18s,border-color .18s; }
+.import-btn:hover:not(:disabled) { background:#f1f6f3; border-color:#b8ccc5; }
+.import-btn:disabled { opacity:.55; }
+.import-note { color:#899592; font-size:10px; }
 .primary-btn { display:inline-flex; align-items:center; justify-content:center; text-align:center; min-height:40px; border:0; border-radius:10px; padding:0 15px; background:#26776c; color:#fff; font-size:12px; font-weight:700; letter-spacing:.01em; transition:background .18s,transform .18s; }
 .primary-btn:hover:not(:disabled) { background:#1e655b; transform:translateY(-1px); }
 .primary-btn:disabled { background:#d8dfdd; color:#8c9996; }

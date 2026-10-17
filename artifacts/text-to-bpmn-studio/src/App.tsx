@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Check, Network, Send, Undo2 } from 'lucide-react';
-import { useGenerateBpmn, useRefineBpmn, type BpmnGraph } from '@workspace/api-client-react';
+import { Check, Network, Paperclip, Send, Undo2 } from 'lucide-react';
+import { useGenerateBpmn, useRefineBpmn, useUploadDocument, type BpmnGraph } from '@workspace/api-client-react';
 import BPMNViewer from './components/BPMNViewer';
 import SpecExportButton from './components/SpecExportButton';
 import { generateBpmnXmlFromJson, mergeGraphs } from './utils/bpmnBuilder';
@@ -33,6 +33,15 @@ function refinementErrorMessage(error: unknown): string {
   return 'Не удалось обновить диаграмму. Исходная схема сохранена — попробуйте уточнить ответ ещё раз.';
 }
 
+function documentErrorMessage(error: unknown): string {
+  if (error && typeof error === 'object' && 'data' in error) {
+    const data = (error as {data?:unknown}).data;
+    if (data && typeof data === 'object' && 'error' in data &&
+      typeof data.error === 'string' && data.error.trim()) return data.error;
+  }
+  return 'Не удалось импортировать документ. Проверьте формат файла и попробуйте ещё раз.';
+}
+
 export default function App(){
   const [userInput,setUserInput]=useState('');
   const [currentXml,setCurrentXml]=useState(MINIMAL_BPMN_XML);
@@ -46,19 +55,23 @@ export default function App(){
   const [aiError,setAiError]=useState('');
   const [isScenarioFinished,setIsScenarioFinished]=useState(false);
   const [isReplyPending,setIsReplyPending]=useState(false);
+  const [isDocumentUploading,setIsDocumentUploading]=useState(false);
   const [rollbackSnapshot,setRollbackSnapshot]=useState<DiagramSnapshot|null>(null);
   const [asideWidth,setAsideWidth]=useState(410);
   const [isResizing,setIsResizing]=useState(false);
   const replyRequestId=useRef(0);
+  const uploadRequestId=useRef(0);
+  const documentInput=useRef<HTMLInputElement>(null);
   const messageEnd=useRef<HTMLDivElement>(null);
   const generate=useGenerateBpmn();
   const refine=useRefineBpmn();
+  const uploadDocument=useUploadDocument();
   const busy=generate.isPending;
   const hasAiMessage=chatMessages.some(m=>m.sender==='ai');
   const hasTextToClear=Boolean(userInput||chatInput||chatMessages.length||aiError);
 
   useEffect(()=>{messageEnd.current?.scrollIntoView({behavior:'smooth'});},[chatMessages]);
-  useEffect(()=>()=>{replyRequestId.current+=1;},[]);
+  useEffect(()=>()=>{replyRequestId.current+=1;uploadRequestId.current+=1;},[]);
   useEffect(()=>{
     if(!isResizing)return;
     const move=(e:MouseEvent)=>setAsideWidth(Math.min(800,Math.max(320,e.clientX)));
@@ -68,23 +81,46 @@ export default function App(){
     return()=>{document.removeEventListener('mousemove',move);document.removeEventListener('mouseup',up);};
   },[isResizing]);
 
+  const applyGeneratedResult=(response:unknown,description:string)=>{
+    const generatedGraph=parseGeneratedGraph(response);
+    const combined=hasGenerated?mergeGraphs(graph,generatedGraph):generatedGraph;
+    const xml=generateBpmnXmlFromJson(combined);
+    setUserInput(description);setGraph(combined);setCurrentXml(xml);setHasGenerated(true);
+    const task=combined.nodes.find(n=>n.type==='userTask'||n.type==='serviceTask')?.name||'этого этапа';
+    const question=QUESTIONS[Math.floor(Math.random()*QUESTIONS.length)].replace('{{task}}',task);
+    setChatMessages([{sender:'ai',text:question}]);setChatInput('');setIsValidated(false);
+    setIsScenarioFinished(false);setSqlSchema(null);
+  };
+
   const handleGenerate=async()=>{
-    const description=userInput.trim();if(!description||busy)return;
+    const description=userInput.trim();if(!description||busy||isDocumentUploading)return;
+    uploadRequestId.current+=1;
     replyRequestId.current+=1;
     setIsReplyPending(false);
     setAiError('');setChatMessages([]);setRollbackSnapshot(null);
     try{
       const result=await generate.mutateAsync({data:{description}});
-      const generatedGraph=parseGeneratedGraph(result);
-      const combined=hasGenerated?mergeGraphs(graph,generatedGraph):generatedGraph;
-      const xml=generateBpmnXmlFromJson(combined);
-      setGraph(combined);setCurrentXml(xml);setHasGenerated(true);
-      const task=combined.nodes.find(n=>n.type==='userTask'||n.type==='serviceTask')?.name||'этого этапа';
-      const question=QUESTIONS[Math.floor(Math.random()*QUESTIONS.length)].replace('{{task}}',task);
-      setChatMessages([{sender:'ai',text:question}]);setChatInput('');setIsValidated(false);
-      setIsScenarioFinished(false);setSqlSchema(null);
+      applyGeneratedResult(result,description);
     }catch{
       setAiError(GENERATION_ERROR_MESSAGE);
+    }
+  };
+
+  const handleDocumentSelected=async(file:File)=>{
+    const requestId=++uploadRequestId.current;
+    replyRequestId.current+=1;
+    setIsReplyPending(false);
+    setIsDocumentUploading(true);setAiError('');
+    try{
+      const result=await uploadDocument.mutateAsync({data:{file}});
+      if(requestId!==uploadRequestId.current)return;
+      setChatMessages([]);setRollbackSnapshot(null);
+      applyGeneratedResult(result,result.description);
+    }catch(error){
+      if(requestId!==uploadRequestId.current)return;
+      setAiError(documentErrorMessage(error));
+    }finally{
+      if(requestId===uploadRequestId.current)setIsDocumentUploading(false);
     }
   };
   const handleReply=async()=>{
@@ -133,17 +169,19 @@ export default function App(){
     setRollbackSnapshot(null);
   };
   const handleClearText=()=>{
+    uploadRequestId.current+=1;
     replyRequestId.current+=1;
-    setUserInput('');setChatMessages([]);setChatInput('');setAiError('');setIsScenarioFinished(false);setIsReplyPending(false);setRollbackSnapshot(null);
+    setUserInput('');setChatMessages([]);setChatInput('');setAiError('');setIsScenarioFinished(false);setIsReplyPending(false);setIsDocumentUploading(false);setRollbackSnapshot(null);
   };
   const handleFinish=()=>{
     replyRequestId.current+=1;
     setIsReplyPending(false);setChatMessages(v=>[...v,{sender:'ai',text:'Процесс завершен пользователем'}]);setIsValidated(true);setIsScenarioFinished(true);
   };
   const handleClearCanvas=()=>{
+    uploadRequestId.current+=1;
     replyRequestId.current+=1;
     setCurrentXml(MINIMAL_BPMN_XML);setGraph({nodes:[],edges:[]});setHasGenerated(false);setChatMessages([]);
-    setChatInput('');setIsValidated(false);setIsScenarioFinished(false);setSqlSchema(null);setRollbackSnapshot(null);setIsReplyPending(false);
+    setChatInput('');setIsValidated(false);setIsScenarioFinished(false);setSqlSchema(null);setRollbackSnapshot(null);setIsReplyPending(false);setIsDocumentUploading(false);
   };
   const copySql=async()=>{
     if(!sqlSchema)return;
@@ -167,18 +205,30 @@ export default function App(){
           <div className="section-title">Опишите бизнес-процесс</div>
           <button type="button" className="text-action" onClick={handleClearText} disabled={!hasTextToClear} title={hasTextToClear?'Очистить описание, чат и сообщение об ошибке':'Очищать пока нечего: все текстовые поля уже пусты'} data-testid="button-clear-text">Очистить текст</button>
         </div>
-        <textarea className="description" value={userInput} onChange={e=>setUserInput(e.target.value)} placeholder="Например: Клиент отправляет заявку, менеджер проверяет её и, если всё корректно, передаёт в отдел исполнения…" data-testid="input-process-description" aria-label="Описание процесса"/>
-        <button type="button" className="primary-btn" style={{width:'100%'}} onClick={()=>void handleGenerate()} disabled={busy||!userInput.trim()} data-testid="button-generate-bpmn">
-          {busy?'ИИ проектирует процесс…':'Сгенерировать диаграмму'}
+        <div className="description-import-row">
+          <button type="button" className="import-btn" onClick={()=>documentInput.current?.click()} disabled={busy||isDocumentUploading} data-testid="button-import-document">
+            <Paperclip size={13}/>{isDocumentUploading?'Обрабатываю документ…':'Импорт документа'}
+          </button>
+          <span className="import-note">DOCX, TXT · до 5 МБ</span>
+          <input ref={documentInput} type="file" accept=".docx,.txt,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" hidden aria-label="Выбрать DOCX или TXT файл" data-testid="input-import-document" onChange={event=>{
+            const file=event.target.files?.[0];
+            if(file)void handleDocumentSelected(file);
+            event.target.value='';
+          }}/>
+        </div>
+        <textarea className="description" value={userInput} onChange={e=>setUserInput(e.target.value)} placeholder="Например: Клиент отправляет заявку, менеджер проверяет её и, если всё корректно, передаёт в отдел исполнения…" disabled={isDocumentUploading} data-testid="input-process-description" aria-label="Описание процесса"/>
+        <button type="button" className="primary-btn" style={{width:'100%'}} onClick={()=>void handleGenerate()} disabled={busy||isDocumentUploading||!userInput.trim()} data-testid="button-generate-bpmn">
+          {isDocumentUploading?'Импортирую документ…':busy?'ИИ проектирует процесс…':'Сгенерировать диаграмму'}
         </button>
         {busy&&<p className="generation-progress" role="status">Обрабатываем описание. При временном сбое Gemini запрос повторяется автоматически. Это может занять до двух минут.</p>}
-        {aiError&&<div className="error-box" role="alert" data-testid="status-generation-error">{GENERATION_ERROR_MESSAGE}</div>}
+        {isDocumentUploading&&<p className="generation-progress" role="status" data-testid="status-document-upload">Извлекаю текст и строю диаграмму…</p>}
+        {aiError&&<div className="error-box" role="alert" data-testid="status-generation-error">{aiError}</div>}
       </section>
 
       <section className="chat-box" aria-label="Чат-валидатор">
         <div className="chat-head">
           <div className="chat-status"><span className={`status-dot ${hasAiMessage?'active':''}`}/><span>Чат-валидатор</span></div>
-          <button type="button" className="finish-btn" onClick={handleFinish} disabled={isScenarioFinished||chatMessages.length===0} title="Сценарий может быть завершен с ошибками" data-testid="button-finish-scenario">Завершить сценарий</button>
+          <button type="button" className="finish-btn" onClick={handleFinish} disabled={isScenarioFinished||chatMessages.length===0||isDocumentUploading} title="Сценарий может быть завершен с ошибками" data-testid="button-finish-scenario">Завершить сценарий</button>
         </div>
         <div className="messages" data-testid="list-validator-messages">
           {chatMessages.length===0?<p className="chat-empty" data-testid="empty-validator">Здесь появятся замечания и вопросы<br/>по сгенерированной схеме</p>:chatMessages.map((m,i)=><div key={i} className={`message-row ${m.sender}${m.canRollback?' has-rollback':''}`}><div className={`message ${m.sender}`} data-testid={`message-validator-${i}`}>{m.text}</div>{m.canRollback&&i===chatMessages.length-1&&rollbackSnapshot&&<button type="button" className="rollback-btn" onClick={handleRollback} data-testid="button-rollback-validator-step"><Undo2 size={12}/>Вернуться назад</button>}</div>)}
@@ -186,8 +236,8 @@ export default function App(){
           <div ref={messageEnd}/>
         </div>
         <div className="chat-compose">
-          <input className="chat-input" value={chatInput} onChange={e=>setChatInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')handleReply();}} disabled={!hasAiMessage||isReplyPending} placeholder="Ваш ответ…" aria-label="Ответ валидатору" data-testid="input-validator-reply"/>
-          <button type="button" className="send-btn" onClick={handleReply} disabled={!hasAiMessage||!chatInput.trim()||isReplyPending} data-testid="button-validator-reply"><Send size={13}/></button>
+          <input className="chat-input" value={chatInput} onChange={e=>setChatInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')handleReply();}} disabled={!hasAiMessage||isReplyPending||isDocumentUploading} placeholder="Ваш ответ…" aria-label="Ответ валидатору" data-testid="input-validator-reply"/>
+          <button type="button" className="send-btn" onClick={handleReply} disabled={!hasAiMessage||!chatInput.trim()||isReplyPending||isDocumentUploading} data-testid="button-validator-reply"><Send size={13}/></button>
         </div>
       </section>
       <div className="eyebrow" style={{display:'flex',justifyContent:'space-between'}}><span>ЛОГИКА · СХЕМА · ЭКСПОРТ</span><span>v1.0</span></div>

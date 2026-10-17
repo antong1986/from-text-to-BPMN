@@ -14,6 +14,10 @@ export interface BpmnGenerateInput {
   description: string;
 }
 
+export interface DocumentUploadInput {
+  file: Blob;
+}
+
 export type BpmnNodeType = typeof BpmnNodeType[keyof typeof BpmnNodeType];
 
 
@@ -51,6 +55,11 @@ export interface BpmnRefineInput {
 }
 
 export interface BpmnGenerateResponse {
+  graph: BpmnGraph;
+}
+
+export interface DocumentUploadResponse {
+  description: string;
   graph: BpmnGraph;
 }
 

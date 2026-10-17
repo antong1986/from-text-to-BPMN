@@ -1,11 +1,15 @@
 import { Router, type IRouter, type Request } from "express";
+import { extname } from "node:path";
+import multer from "multer";
 import { fetchGeminiWithRetry } from "../lib/gemini-request";
 import { BPMN_RESPONSE_FORMAT } from "../lib/bpmn-response-format";
 import { getRefinementIssue } from "../lib/bpmn-refinement";
 import { parseBpmnGraph, parseBpmnRefinement } from "../lib/parse-bpmn-graph";
+import { extractAndFilterText } from "../lib/document-preparser";
 import {
   GenerateBpmnBody,
   GenerateBpmnResponse,
+  UploadDocumentResponse,
   RefineBpmnBody,
   RefineBpmnResponse,
   GenerateSpecBody,
@@ -23,6 +27,7 @@ const DEFAULT_AI_BASE_URL =
   "https://generativelanguage.googleapis.com/v1beta/openai";
 const DEFAULT_AI_MODEL_NAME = "gemini-3.6-flash";
 const MAX_TOKENS = 16384;
+const MAX_DOCUMENT_BYTES = 5 * 1024 * 1024;
 
 type ChatMessage = { role: "system" | "user"; content: string };
 type ModelResult =
@@ -133,6 +138,68 @@ async function callModel(
   return { content };
 }
 
+type GeneratedGraph = ReturnType<typeof GenerateBpmnResponse.parse>["graph"];
+
+async function generateGraphFromDescription(
+  description: string,
+  req: Request,
+): Promise<{graph:GeneratedGraph}|{error:string;status:number}> {
+  const result = await callModel(
+    [
+      { role: "system", content: BPMN_GRAPH_SYSTEM_PROMPT },
+      { role: "user", content: description.trim() },
+    ],
+    req,
+    true,
+  );
+  if ("error" in result) return result;
+
+  let graph: unknown;
+  try {
+    graph = parseBpmnGraph(result.content);
+  } catch {
+    req.log.warn({ model: getAiModelName() }, "Gemini response was not a JSON graph");
+    return {status:502,error:"Gemini did not return a valid BPMN graph."};
+  }
+
+  const output = GenerateBpmnResponse.safeParse({graph});
+  if (!output.success) {
+    req.log.warn(
+      { model: getAiModelName(), validation: output.error.message },
+      "Gemini graph did not match the BPMN contract",
+    );
+    return {status:502,error:"Gemini returned a graph in an invalid format."};
+  }
+  return {graph:output.data.graph};
+}
+
+const documentUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {fileSize:MAX_DOCUMENT_BYTES,files:1,fields:0,parts:1},
+  fileFilter(_req,file,callback) {
+    const extension = extname(file.originalname).toLowerCase();
+    callback(null,extension === ".docx" || extension === ".txt");
+  },
+});
+
+function receiveDocument(req:Request,res:import("express").Response,next:import("express").NextFunction):void {
+  documentUpload.single("file")(req,res,(error:unknown) => {
+    if (!error) {
+      next();
+      return;
+    }
+    if (error instanceof multer.MulterError && error.code === "LIMIT_FILE_SIZE") {
+      res.status(413).json({error:"Файл слишком большой. Максимальный размер — 5 МБ."});
+      return;
+    }
+    req.log.warn(
+      {error:error instanceof Error ? error.message : "upload failed"},
+      "Document upload could not be parsed",
+    );
+    res.status(400).json({error:"Не удалось принять файл. Загрузите документ .docx или .txt."});
+  });
+}
+
 router.post("/generate", async (req, res): Promise<void> => {
   const input = GenerateBpmnBody.safeParse(req.body);
   if (!input.success) {
@@ -140,38 +207,50 @@ router.post("/generate", async (req, res): Promise<void> => {
     return;
   }
 
-  const result = await callModel(
-    [
-      { role: "system", content: BPMN_GRAPH_SYSTEM_PROMPT },
-      { role: "user", content: input.data.description.trim() },
-    ],
-    req,
-    true,
-  );
+  const result = await generateGraphFromDescription(input.data.description,req);
   if ("error" in result) {
     res.status(result.status).json({ error: result.error });
     return;
   }
 
-  let graph: unknown;
+  res.json(GenerateBpmnResponse.parse(result));
+});
+
+router.post("/upload-document",receiveDocument,async(req,res):Promise<void> => {
+  const file=req.file;
+  if(!file) {
+    res.status(400).json({error:"Выберите файл .docx или .txt для импорта."});
+    return;
+  }
+
+  let description:string;
   try {
-    graph = parseBpmnGraph(result.content);
-  } catch {
-    req.log.warn({ model: getAiModelName() }, "Gemini response was not a JSON graph");
-    res.status(502).json({ error: "Gemini did not return a valid BPMN graph." });
-    return;
-  }
-
-  const output = GenerateBpmnResponse.safeParse({ graph });
-  if (!output.success) {
+    description=await extractAndFilterText(file.buffer,extname(file.originalname));
+  } catch(error) {
     req.log.warn(
-      { model: getAiModelName(), validation: output.error.message },
-      "Gemini graph did not match the BPMN contract",
+      {extension:extname(file.originalname),error:error instanceof Error ? error.message : "document parse failed"},
+      "Uploaded document did not contain readable process text",
     );
-    res.status(502).json({ error: "Gemini returned a graph in an invalid format." });
+    res.status(400).json({
+      error:error instanceof Error && error.message === "The document does not contain readable text."
+        ? "В документе не найден читаемый текст."
+        : "Не удалось прочитать документ. Проверьте формат и целостность файла.",
+    });
     return;
   }
 
+  const generated=await generateGraphFromDescription(description,req);
+  if("error" in generated) {
+    res.status(generated.status).json({error:generated.error});
+    return;
+  }
+
+  const output=UploadDocumentResponse.safeParse({description,graph:generated.graph});
+  if(!output.success) {
+    req.log.error({validation:output.error.message},"Document upload response failed contract validation");
+    res.status(500).json({error:"Не удалось обработать документ."});
+    return;
+  }
   res.json(output.data);
 });
 

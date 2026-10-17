@@ -62,6 +62,48 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /upload-document:
+    post:
+      operationId: uploadDocument
+      tags: [text-to-bpmn]
+      summary: Extract a process description from a document and generate its BPMN graph
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/DocumentUploadInput"
+      responses:
+        "200":
+          description: Extracted description and generated process graph
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentUploadResponse"
+        "400":
+          description: Unsupported, empty, or unreadable document
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "413":
+          description: Document exceeds the upload size limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: The AI provider returned an error or invalid graph
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: AI provider credentials are not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /refine:
     post:
       operationId: refineBpmn
@@ -156,6 +198,13 @@ components:
           type: string
           minLength: 1
       required: [description]
+    DocumentUploadInput:
+      type: object
+      properties:
+        file:
+          type: string
+          format: binary
+      required: [file]
     BpmnRefineInput:
       type: object
       properties:
@@ -207,6 +256,14 @@ components:
         graph:
           $ref: "#/components/schemas/BpmnGraph"
       required: [graph]
+    DocumentUploadResponse:
+      type: object
+      properties:
+        description:
+          type: string
+        graph:
+          $ref: "#/components/schemas/BpmnGraph"
+      required: [description, graph]
     BpmnRefineResponse:
       type: object
       properties:

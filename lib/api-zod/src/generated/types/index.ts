@@ -16,5 +16,7 @@ export * from './bpmnRefineInput';
 export * from './bpmnRefineResponse';
 export * from './bpmnSpecInput';
 export * from './bpmnSpecResponse';
+export * from './documentUploadInput';
+export * from './documentUploadResponse';
 export * from './errorResponse';
 export * from './healthStatus';
