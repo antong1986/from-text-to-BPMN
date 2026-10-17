@@ -117,6 +117,10 @@ button:disabled { cursor: not-allowed; }
 .message-row.user { justify-content:flex-end; }
 .message { max-width:88%; padding:10px 12px; border-radius:12px; border-top-left-radius:4px; background:#f0f3f1; color:#56615f; font-size:11px; line-height:1.6; }
 .message.user { border-radius:12px 4px 12px 12px; background:#28766c; color:#fff; }
+.message-row.has-rollback { flex-direction:column; align-items:flex-start; gap:5px; }
+.rollback-btn { display:inline-flex; align-items:center; gap:5px; padding:4px 8px; border:1px solid #dce2e0; border-radius:7px; background:#fff; color:#54756f; font-size:10px; cursor:pointer; }
+.rollback-btn:hover { background:#f0f5f2; border-color:#b8ccc5; }
+.rollback-btn:focus-visible { outline:2px solid #5a9a8e; outline-offset:2px; }
 .chat-compose { display:flex; gap:7px; padding:11px; border-top:1px solid #edf0ee; }
 .chat-input { flex:1; min-width:0; height:36px; border:1px solid #dce2e0; border-radius:9px; padding:0 11px; font-size:11px; outline:none; }
 .chat-input:disabled { background:#f4f6f4; }

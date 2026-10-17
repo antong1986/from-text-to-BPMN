@@ -114,3 +114,43 @@ export function mergeGraphs(base: BpmnGraph, next: BpmnGraph): BpmnGraph {
   const addEdges = next.edges.filter(e => e.from !== skip?.id).map(e => ({...e,from:nodeIds.get(e.from)!,to:nodeIds.get(e.to)!}));
   return {nodes:[...oldNodes,...addNodes],edges:[...oldEdges,...links,...addEdges]};
 }
+
+export function applyClarificationToGraph(base: BpmnGraph, answer: string): BpmnGraph {
+  validate(base);
+  const requestsNotification =
+    /(?:отправ[\p{L}]*|посыл[\p{L}]*|направ[\p{L}]*|notify|send)\s+(?:клиенту\s+)?(?:уведом[\p{L}]*|сообщени[\p{L}]*|письм[\p{L}]*|notification|message)/iu.test(answer) ||
+    /(?:уведом[\p{L}]*|notification)\s+(?:клиенту\s+)?(?:нужн[\p{L}]*|отправ[\p{L}]*|посыл[\p{L}]*)/iu.test(answer);
+  const rejectsNotification =
+    /не\s+(?:нужно\s+)?(?:отправ[\p{L}]*|посыл[\p{L}]*|направ[\p{L}]*|уведом[\p{L}]*)/iu.test(answer);
+
+  if (!requestsNotification || rejectsNotification) {
+    return {nodes: base.nodes.map(node => ({...node})), edges: base.edges.map(edge => ({...edge}))};
+  }
+
+  const terminals = base.nodes.filter(node => node.type === 'end');
+  if (!terminals.length) {
+    return {nodes: base.nodes.map(node => ({...node})), edges: base.edges.map(edge => ({...edge}))};
+  }
+
+  const nodes = base.nodes.map(node => ({...node}));
+  const edges = base.edges.map(edge => ({...edge}));
+  const usedIds = new Set(nodes.map(node => node.id));
+  let notificationIndex = 1;
+
+  terminals.forEach(terminal => {
+    const incomingEdges = edges.filter(edge => edge.to === terminal.id);
+    if (!incomingEdges.length) return;
+
+    let notificationId = `clarification_notification_${notificationIndex++}`;
+    while (usedIds.has(notificationId)) {
+      notificationId = `clarification_notification_${notificationIndex++}`;
+    }
+    usedIds.add(notificationId);
+    nodes.push({id: notificationId, type: 'serviceTask', name: 'Отправить уведомление клиенту'});
+
+    incomingEdges.forEach(edge => { edge.to = notificationId; });
+    edges.push({from: notificationId, to: terminal.id});
+  });
+
+  return {nodes, edges};
+}

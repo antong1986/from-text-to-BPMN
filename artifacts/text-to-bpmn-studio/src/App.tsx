@@ -1,14 +1,22 @@
 import { useEffect, useRef, useState } from 'react';
-import { Check, Network, Send } from 'lucide-react';
+import { Check, Network, Send, Undo2 } from 'lucide-react';
 import { useGenerateBpmn, type BpmnGraph } from '@workspace/api-client-react';
 import BPMNViewer from './components/BPMNViewer';
 import SpecExportButton from './components/SpecExportButton';
-import { generateBpmnXmlFromJson, mergeGraphs } from './utils/bpmnBuilder';
+import { applyClarificationToGraph, generateBpmnXmlFromJson, mergeGraphs } from './utils/bpmnBuilder';
 import { MINIMAL_BPMN_XML, MOCK_ORDER_GRAPH, MOCK_REJECTION_GRAPH } from './utils/mockBpmn';
 import { generateSqlSchema } from './utils/generateSqlSchema';
 import { parseGeneratedGraph } from './utils/parseGeneratedGraph';
 
-type ChatMessage={sender:'ai'|'user';text:string};
+type ChatMessage={sender:'ai'|'user';text:string;canRollback?:boolean};
+type DiagramSnapshot={
+  graph:BpmnGraph;
+  xml:string;
+  chatMessages:ChatMessage[];
+  isValidated:boolean;
+  isScenarioFinished:boolean;
+  sqlSchema:string|null;
+};
 const GENERATION_ERROR_MESSAGE = 'Не удалось построить диаграмму: модель перегружена. Попробуйте повторить запрос позже.';
 const EXAMPLES=[
   {label:'Обработка заявки',text:'Клиент отправляет заявку. Менеджер проверяет её и, если данные корректны, система регистрирует заявку. Если данные неверны — клиенту отправляется отказ.'},
@@ -32,6 +40,8 @@ export default function App(){
   const [isCopied,setIsCopied]=useState(false);
   const [aiError,setAiError]=useState('');
   const [isScenarioFinished,setIsScenarioFinished]=useState(false);
+  const [isReplyPending,setIsReplyPending]=useState(false);
+  const [rollbackSnapshot,setRollbackSnapshot]=useState<DiagramSnapshot|null>(null);
   const [asideWidth,setAsideWidth]=useState(410);
   const [isResizing,setIsResizing]=useState(false);
   const replyTimeout=useRef<number|null>(null);
@@ -54,7 +64,9 @@ export default function App(){
 
   const handleGenerate=async()=>{
     const description=userInput.trim();if(!description||busy)return;
-    setAiError('');setChatMessages([]);
+    if(replyTimeout.current!==null){window.clearTimeout(replyTimeout.current);replyTimeout.current=null;}
+    setIsReplyPending(false);
+    setAiError('');setChatMessages([]);setRollbackSnapshot(null);
     try{
       const result=await generate.mutateAsync({data:{description}});
       const generatedGraph=parseGeneratedGraph(result);
@@ -70,43 +82,62 @@ export default function App(){
     }
   };
   const handleReply=()=>{
-    const answer=chatInput.trim();if(!answer||!hasAiMessage)return;
+    const answer=chatInput.trim();if(!answer||!hasAiMessage||replyTimeout.current!==null)return;
+    setRollbackSnapshot({
+      graph:{nodes:graph.nodes.map(node=>({...node})),edges:graph.edges.map(edge=>({...edge}))},
+      xml:currentXml,
+      chatMessages:chatMessages.map(message=>({...message})),
+      isValidated,
+      isScenarioFinished,
+      sqlSchema,
+    });
     setChatMessages(v=>[...v,{sender:'user',text:answer}]);setChatInput('');setIsScenarioFinished(false);
+    setIsReplyPending(true);
     replyTimeout.current=window.setTimeout(()=>{
       replyTimeout.current=null;
-      const notificationGraph:BpmnGraph={
-        nodes:[
-          {id:'start',type:'start',name:'Начало'},{id:'review',type:'userTask',name:'Проверить заявку'},
-          {id:'gateway',type:'gateway',name:'Заявка корректна?'},{id:'process',type:'userTask',name:'Обработать заявку'},
-          {id:'success',type:'end',name:'Успешно завершено'},{id:'notify',type:'serviceTask',name:'Отправить уведомление клиенту'},
-          {id:'failure',type:'end',name:'Ошибка/Отклонено'},
-        ],
-        edges:[{from:'start',to:'review'},{from:'review',to:'gateway'},{from:'gateway',to:'process',condition:'Да'},
-          {from:'gateway',to:'notify',condition:'Нет'},{from:'process',to:'success'},{from:'notify',to:'failure'}],
-      };
-      setGraph(notificationGraph);setCurrentXml(generateBpmnXmlFromJson(notificationGraph));
-      setChatMessages(v=>[...v,{sender:'ai',text:'Отлично, логика обновлена! Я добавил промежуточное событие отправки уведомления перед завершением процесса.'}]);
-      setIsValidated(true);
+      setIsReplyPending(false);
+      const updatedGraph=applyClarificationToGraph(graph,answer);
+      const addedNotification=updatedGraph.nodes.length>graph.nodes.length;
+      setGraph(updatedGraph);setCurrentXml(generateBpmnXmlFromJson(updatedGraph));
+      setChatMessages(v=>[...v,{sender:'ai',text:addedNotification
+        ?'Отлично, логику обновил: добавил отправку уведомления перед завершением соответствующих ветвей.'
+        :'Спасибо, учёл ответ. Существующие ветви диаграммы сохранены без изменений.',canRollback:true}]);
+      setIsValidated(true);setSqlSchema(null);
     },1000);
+  };
+  const handleRollback=()=>{
+    if(!rollbackSnapshot)return;
+    if(replyTimeout.current!==null){window.clearTimeout(replyTimeout.current);replyTimeout.current=null;}
+    setGraph(rollbackSnapshot.graph);
+    setCurrentXml(rollbackSnapshot.xml);
+    setChatMessages(rollbackSnapshot.chatMessages);
+    setIsValidated(rollbackSnapshot.isValidated);
+    setIsScenarioFinished(rollbackSnapshot.isScenarioFinished);
+    setSqlSchema(rollbackSnapshot.sqlSchema);
+    setChatInput('');
+    setIsReplyPending(false);
+    setRollbackSnapshot(null);
   };
   const handleClearText=()=>{
     if(replyTimeout.current!==null){window.clearTimeout(replyTimeout.current);replyTimeout.current=null;}
-    setUserInput('');setChatMessages([]);setChatInput('');setAiError('');setIsScenarioFinished(false);
+    setUserInput('');setChatMessages([]);setChatInput('');setAiError('');setIsScenarioFinished(false);setIsReplyPending(false);setRollbackSnapshot(null);
   };
   const handleFinish=()=>{
     if(replyTimeout.current!==null){window.clearTimeout(replyTimeout.current);replyTimeout.current=null;}
-    setChatMessages(v=>[...v,{sender:'ai',text:'Процесс завершен пользователем'}]);setIsValidated(true);setIsScenarioFinished(true);
+    setIsReplyPending(false);setChatMessages(v=>[...v,{sender:'ai',text:'Процесс завершен пользователем'}]);setIsValidated(true);setIsScenarioFinished(true);
   };
   const handleClearCanvas=()=>{
+    if(replyTimeout.current!==null){window.clearTimeout(replyTimeout.current);replyTimeout.current=null;}
     setCurrentXml(MINIMAL_BPMN_XML);setGraph({nodes:[],edges:[]});setHasGenerated(false);setChatMessages([]);
-    setChatInput('');setIsValidated(false);setIsScenarioFinished(false);setSqlSchema(null);
+    setChatInput('');setIsValidated(false);setIsScenarioFinished(false);setSqlSchema(null);setRollbackSnapshot(null);setIsReplyPending(false);
   };
   const loadExample=(kind:'application'|'order')=>{
+    if(replyTimeout.current!==null){window.clearTimeout(replyTimeout.current);replyTimeout.current=null;}
     const sample=kind==='application'?MOCK_REJECTION_GRAPH:MOCK_ORDER_GRAPH;
     setUserInput(kind==='application'?EXAMPLES[0].text:EXAMPLES[1].text);
     setGraph(sample);setCurrentXml(generateBpmnXmlFromJson(sample));setHasGenerated(true);
     setChatMessages([{sender:'ai',text:'Посмотрите на развилку процесса. Что нужно сделать при отказе или отсутствии товара?'}]);
-    setIsValidated(false);setIsScenarioFinished(false);setAiError('');
+    setIsValidated(false);setIsScenarioFinished(false);setAiError('');setRollbackSnapshot(null);setIsReplyPending(false);
   };
   const copySql=async()=>{
     if(!sqlSchema)return;
@@ -148,12 +179,12 @@ export default function App(){
           <button type="button" className="finish-btn" onClick={handleFinish} disabled={isScenarioFinished||chatMessages.length===0} title="Сценарий может быть завершен с ошибками" data-testid="button-finish-scenario">Завершить сценарий</button>
         </div>
         <div className="messages" data-testid="list-validator-messages">
-          {chatMessages.length===0?<p className="chat-empty" data-testid="empty-validator">Здесь появятся замечания и вопросы по сгенерированной схеме</p>:chatMessages.map((m,i)=><div key={i} className={`message-row ${m.sender}`}><div className={`message ${m.sender}`} data-testid={`message-validator-${i}`}>{m.text}</div></div>)}
+          {chatMessages.length===0?<p className="chat-empty" data-testid="empty-validator">Здесь появятся замечания и вопросы по сгенерированной схеме</p>:chatMessages.map((m,i)=><div key={i} className={`message-row ${m.sender}${m.canRollback?' has-rollback':''}`}><div className={`message ${m.sender}`} data-testid={`message-validator-${i}`}>{m.text}</div>{m.canRollback&&i===chatMessages.length-1&&rollbackSnapshot&&<button type="button" className="rollback-btn" onClick={handleRollback} data-testid="button-rollback-validator-step"><Undo2 size={12}/>Вернуться назад</button>}</div>)}
           <div ref={messageEnd}/>
         </div>
         <div className="chat-compose">
-          <input className="chat-input" value={chatInput} onChange={e=>setChatInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')handleReply();}} disabled={!hasAiMessage} placeholder="Ваш ответ…" aria-label="Ответ валидатору" data-testid="input-validator-reply"/>
-          <button type="button" className="send-btn" onClick={handleReply} disabled={!hasAiMessage||!chatInput.trim()} data-testid="button-validator-reply"><Send size={13}/></button>
+          <input className="chat-input" value={chatInput} onChange={e=>setChatInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')handleReply();}} disabled={!hasAiMessage||isReplyPending} placeholder="Ваш ответ…" aria-label="Ответ валидатору" data-testid="input-validator-reply"/>
+          <button type="button" className="send-btn" onClick={handleReply} disabled={!hasAiMessage||!chatInput.trim()||isReplyPending} data-testid="button-validator-reply"><Send size={13}/></button>
         </div>
       </section>
       <div className="eyebrow" style={{display:'flex',justifyContent:'space-between'}}><span>ЛОГИКА · СХЕМА · ЭКСПОРТ</span><span>v1.0</span></div>
