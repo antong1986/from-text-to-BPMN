@@ -5,8 +5,11 @@ import 'bpmn-js/dist/assets/bpmn-font/css/bpmn.css';
 
 import App from './App';
 import { ErrorBoundary } from '@/components/error-boundary';
+import { setBaseUrl } from '@workspace/api-client-react';
 
 import './index.css';
+
+setBaseUrl(import.meta.env.VITE_API_URL?.trim() || null);
 
 const queryClient = new QueryClient();
 

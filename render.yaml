@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: text-to-bpmn-api
+    runtime: node
+    plan: free
+    rootDir: .
+    buildCommand: pnpm run build:api
+    startCommand: pnpm run start:api
+    healthCheckPath: /api/healthz
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: AI_BASE_URL
+        value: https://generativelanguage.googleapis.com/v1beta/openai
+      - key: AI_MODEL_NAME
+        value: gemini-3.6-flash
+      - key: AI_API_KEY
+        sync: false
