@@ -143,6 +143,8 @@ button:disabled { cursor: not-allowed; }
 .bpmn-stage { position:absolute; inset:0; width:100%; height:100%; }
 .bpmn-host { position:absolute; inset:0; width:100%; height:100%; }
 .bpmn-host .bjs-container,.bpmn-host .djs-container { width:100%; height:100%!important; }
+.bpmn-host .djs-palette { width:48px; }
+.bpmn-host .djs-palette .entry { display:block; float:none; width:100%; }
 .canvas-clear { position:absolute; left:16px; bottom:16px; z-index:5; display:inline-flex; align-items:center; justify-content:center; text-align:center; border:1px solid #d9e0dd; border-radius:9px; padding:8px 11px; background:#ffffffed; color:#64716e; font-size:10px; box-shadow:0 3px 12px #1b3b3210; }
 .canvas-clear:hover:not(:disabled) { color:#a34e40; border-color:#e4c6bd; }
 .canvas-clear:disabled { opacity:.5; }
