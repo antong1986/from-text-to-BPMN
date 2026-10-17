@@ -144,14 +144,16 @@ button:disabled { cursor: not-allowed; }
 .bpmn-host { position:absolute; inset:0; width:100%; height:100%; }
 .bpmn-host .bjs-container,.bpmn-host .djs-container { width:100%; height:100%!important; }
 .bpmn-host .djs-palette,
-.bpmn-host .djs-palette.two-column.open { width:24px; }
+.bpmn-host .djs-palette.two-column.open { width:56px; }
 .bpmn-host .djs-palette .entry,
 .bpmn-host .djs-palette .djs-palette-toggle {
   box-sizing:border-box;
-  width:100%;
+  width:48px;
   height:46px;
   line-height:46px;
-  font-size:16px;
+  margin-right:4px;
+  margin-left:4px;
+  font-size:30px;
 }
 .bpmn-host .djs-palette .entry { display:block; float:none; }
 .canvas-clear { position:absolute; left:16px; bottom:16px; z-index:5; display:inline-flex; align-items:center; justify-content:center; text-align:center; border:1px solid #d9e0dd; border-radius:9px; padding:8px 11px; background:#ffffffed; color:#64716e; font-size:10px; box-shadow:0 3px 12px #1b3b3210; }
