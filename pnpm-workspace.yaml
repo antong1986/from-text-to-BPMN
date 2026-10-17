@@ -166,4 +166,3 @@ overrides:
   brace-expansion: 5.0.12
   fast-uri: 3.1.8
   postcss-selector-parser: 7.1.6
-  prosemirror-model: 1.25.12

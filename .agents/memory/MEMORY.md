@@ -1,0 +1,1 @@
+- [Verify installed dependencies](dependency-audit-verification.md) — after workspace overrides, confirm resolved installs as well as the lockfile audit.
