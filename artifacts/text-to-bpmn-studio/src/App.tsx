@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Check, Network, Send, Undo2 } from 'lucide-react';
-import { useGenerateBpmn, type BpmnGraph } from '@workspace/api-client-react';
+import { useGenerateBpmn, useRefineBpmn, type BpmnGraph } from '@workspace/api-client-react';
 import BPMNViewer from './components/BPMNViewer';
 import SpecExportButton from './components/SpecExportButton';
-import { applyClarificationToGraph, generateBpmnXmlFromJson, mergeGraphs } from './utils/bpmnBuilder';
+import { generateBpmnXmlFromJson, mergeGraphs } from './utils/bpmnBuilder';
 import { MINIMAL_BPMN_XML, MOCK_ORDER_GRAPH, MOCK_REJECTION_GRAPH } from './utils/mockBpmn';
 import { generateSqlSchema } from './utils/generateSqlSchema';
 import { parseGeneratedGraph } from './utils/parseGeneratedGraph';
@@ -28,6 +28,15 @@ const QUESTIONS=[
   'Логика процесса понятна. Нужно ли автоматически уведомлять ответственных лиц после выполнения шага «{{task}}»?',
 ];
 
+function refinementErrorMessage(error: unknown): string {
+  if (error && typeof error === 'object' && 'data' in error) {
+    const data = (error as {data?:unknown}).data;
+    if (data && typeof data === 'object' && 'error' in data &&
+      typeof data.error === 'string' && data.error.trim()) return data.error;
+  }
+  return 'Не удалось обновить диаграмму. Исходная схема сохранена — попробуйте уточнить ответ ещё раз.';
+}
+
 export default function App(){
   const [userInput,setUserInput]=useState('');
   const [currentXml,setCurrentXml]=useState(MINIMAL_BPMN_XML);
@@ -44,15 +53,16 @@ export default function App(){
   const [rollbackSnapshot,setRollbackSnapshot]=useState<DiagramSnapshot|null>(null);
   const [asideWidth,setAsideWidth]=useState(410);
   const [isResizing,setIsResizing]=useState(false);
-  const replyTimeout=useRef<number|null>(null);
+  const replyRequestId=useRef(0);
   const messageEnd=useRef<HTMLDivElement>(null);
   const generate=useGenerateBpmn();
+  const refine=useRefineBpmn();
   const busy=generate.isPending;
   const hasAiMessage=chatMessages.some(m=>m.sender==='ai');
   const hasTextToClear=Boolean(userInput||chatInput||chatMessages.length||aiError);
 
   useEffect(()=>{messageEnd.current?.scrollIntoView({behavior:'smooth'});},[chatMessages]);
-  useEffect(()=>()=>{if(replyTimeout.current!==null)window.clearTimeout(replyTimeout.current);},[]);
+  useEffect(()=>()=>{replyRequestId.current+=1;},[]);
   useEffect(()=>{
     if(!isResizing)return;
     const move=(e:MouseEvent)=>setAsideWidth(Math.min(800,Math.max(320,e.clientX)));
@@ -64,7 +74,7 @@ export default function App(){
 
   const handleGenerate=async()=>{
     const description=userInput.trim();if(!description||busy)return;
-    if(replyTimeout.current!==null){window.clearTimeout(replyTimeout.current);replyTimeout.current=null;}
+    replyRequestId.current+=1;
     setIsReplyPending(false);
     setAiError('');setChatMessages([]);setRollbackSnapshot(null);
     try{
@@ -81,8 +91,8 @@ export default function App(){
       setAiError(GENERATION_ERROR_MESSAGE);
     }
   };
-  const handleReply=()=>{
-    const answer=chatInput.trim();if(!answer||!hasAiMessage||replyTimeout.current!==null)return;
+  const handleReply=async()=>{
+    const answer=chatInput.trim();if(!answer||!hasAiMessage||isReplyPending)return;
     setRollbackSnapshot({
       graph:{nodes:graph.nodes.map(node=>({...node})),edges:graph.edges.map(edge=>({...edge}))},
       xml:currentXml,
@@ -93,21 +103,29 @@ export default function App(){
     });
     setChatMessages(v=>[...v,{sender:'user',text:answer}]);setChatInput('');setIsScenarioFinished(false);
     setIsReplyPending(true);
-    replyTimeout.current=window.setTimeout(()=>{
-      replyTimeout.current=null;
-      setIsReplyPending(false);
-      const updatedGraph=applyClarificationToGraph(graph,answer);
-      const addedNotification=updatedGraph.nodes.length>graph.nodes.length;
-      setGraph(updatedGraph);setCurrentXml(generateBpmnXmlFromJson(updatedGraph));
-      setChatMessages(v=>[...v,{sender:'ai',text:addedNotification
-        ?'Отлично, логику обновил: добавил отправку уведомления перед завершением соответствующих ветвей.'
-        :'Спасибо, учёл ответ. Существующие ветви диаграммы сохранены без изменений.',canRollback:true}]);
+    const requestId=++replyRequestId.current;
+    try{
+      const result=await refine.mutateAsync({data:{
+        description:userInput.trim(),
+        answer,
+        graph,
+      }});
+      if(requestId!==replyRequestId.current)return;
+      const updatedGraph=parseGeneratedGraph(result.graph);
+      const updatedXml=generateBpmnXmlFromJson(updatedGraph);
+      setGraph(updatedGraph);setCurrentXml(updatedXml);
+      setChatMessages(v=>[...v,{sender:'ai',text:result.message,canRollback:true}]);
       setIsValidated(true);setSqlSchema(null);
-    },1000);
+    }catch(error){
+      if(requestId!==replyRequestId.current)return;
+      setChatMessages(v=>[...v,{sender:'ai',text:refinementErrorMessage(error),canRollback:true}]);
+    }finally{
+      if(requestId===replyRequestId.current)setIsReplyPending(false);
+    }
   };
   const handleRollback=()=>{
     if(!rollbackSnapshot)return;
-    if(replyTimeout.current!==null){window.clearTimeout(replyTimeout.current);replyTimeout.current=null;}
+    replyRequestId.current+=1;
     setGraph(rollbackSnapshot.graph);
     setCurrentXml(rollbackSnapshot.xml);
     setChatMessages(rollbackSnapshot.chatMessages);
@@ -119,20 +137,20 @@ export default function App(){
     setRollbackSnapshot(null);
   };
   const handleClearText=()=>{
-    if(replyTimeout.current!==null){window.clearTimeout(replyTimeout.current);replyTimeout.current=null;}
+    replyRequestId.current+=1;
     setUserInput('');setChatMessages([]);setChatInput('');setAiError('');setIsScenarioFinished(false);setIsReplyPending(false);setRollbackSnapshot(null);
   };
   const handleFinish=()=>{
-    if(replyTimeout.current!==null){window.clearTimeout(replyTimeout.current);replyTimeout.current=null;}
+    replyRequestId.current+=1;
     setIsReplyPending(false);setChatMessages(v=>[...v,{sender:'ai',text:'Процесс завершен пользователем'}]);setIsValidated(true);setIsScenarioFinished(true);
   };
   const handleClearCanvas=()=>{
-    if(replyTimeout.current!==null){window.clearTimeout(replyTimeout.current);replyTimeout.current=null;}
+    replyRequestId.current+=1;
     setCurrentXml(MINIMAL_BPMN_XML);setGraph({nodes:[],edges:[]});setHasGenerated(false);setChatMessages([]);
     setChatInput('');setIsValidated(false);setIsScenarioFinished(false);setSqlSchema(null);setRollbackSnapshot(null);setIsReplyPending(false);
   };
   const loadExample=(kind:'application'|'order')=>{
-    if(replyTimeout.current!==null){window.clearTimeout(replyTimeout.current);replyTimeout.current=null;}
+    replyRequestId.current+=1;
     const sample=kind==='application'?MOCK_REJECTION_GRAPH:MOCK_ORDER_GRAPH;
     setUserInput(kind==='application'?EXAMPLES[0].text:EXAMPLES[1].text);
     setGraph(sample);setCurrentXml(generateBpmnXmlFromJson(sample));setHasGenerated(true);
@@ -180,6 +198,7 @@ export default function App(){
         </div>
         <div className="messages" data-testid="list-validator-messages">
           {chatMessages.length===0?<p className="chat-empty" data-testid="empty-validator">Здесь появятся замечания и вопросы по сгенерированной схеме</p>:chatMessages.map((m,i)=><div key={i} className={`message-row ${m.sender}${m.canRollback?' has-rollback':''}`}><div className={`message ${m.sender}`} data-testid={`message-validator-${i}`}>{m.text}</div>{m.canRollback&&i===chatMessages.length-1&&rollbackSnapshot&&<button type="button" className="rollback-btn" onClick={handleRollback} data-testid="button-rollback-validator-step"><Undo2 size={12}/>Вернуться назад</button>}</div>)}
+          {isReplyPending&&<p className="generation-progress" role="status" data-testid="status-refining-diagram">Обновляю диаграмму по вашему уточнению…</p>}
           <div ref={messageEnd}/>
         </div>
         <div className="chat-compose">

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { GenerateBpmnResponse } from '../../../lib/api-zod/src/generated/api.ts';
-import { parseBpmnGraph } from '../src/lib/parse-bpmn-graph.ts';
+import { parseBpmnGraph, parseBpmnRefinement } from '../src/lib/parse-bpmn-graph.ts';
 
 test('markdown is stripped and missing names are normalized before API validation', () => {
   const graph = {
@@ -19,4 +19,12 @@ test('markdown is stripped and missing names are normalized before API validatio
 test('invalid response is not silently replaced with a mock diagram', () => {
   assert.throws(() => parseBpmnGraph('```json\n{"nodes":\n```'));
   assert.throws(() => parseBpmnGraph('{"error": "no graph"}'));
+});
+
+test('clarification response keeps the updated graph and its response message', () => {
+  const response = parseBpmnRefinement(`\`\`\`json
+    {"graph":{"nodes":[{"id":"start","type":"start"}],"edges":[]},"message":"Добавил возврат товара на склад."}
+  \`\`\``);
+  assert.equal(response.message,'Добавил возврат товара на склад.');
+  assert.equal(response.graph.nodes[0].name,'start');
 });

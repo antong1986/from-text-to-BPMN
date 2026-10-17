@@ -12,6 +12,8 @@ export * from './bpmnGenerateResponse';
 export * from './bpmnGraph';
 export * from './bpmnNode';
 export * from './bpmnNodeType';
+export * from './bpmnRefineInput';
+export * from './bpmnRefineResponse';
 export * from './bpmnSpecInput';
 export * from './bpmnSpecResponse';
 export * from './errorResponse';

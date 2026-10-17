@@ -44,6 +44,47 @@ export const GenerateBpmnResponse = zod.object({
 
 
 /**
+ * @summary Apply a clarification to an existing BPMN graph
+ */
+
+
+
+
+export const RefineBpmnBody = zod.object({
+  "description": zod.string().min(1),
+  "answer": zod.string().min(1),
+  "graph": zod.object({
+  "nodes": zod.array(zod.object({
+  "id": zod.string(),
+  "type": zod.enum(['start', 'end', 'userTask', 'serviceTask', 'gateway']),
+  "name": zod.string()
+})),
+  "edges": zod.array(zod.object({
+  "from": zod.string(),
+  "to": zod.string(),
+  "condition": zod.string().optional()
+}))
+})
+})
+
+export const RefineBpmnResponse = zod.object({
+  "graph": zod.object({
+  "nodes": zod.array(zod.object({
+  "id": zod.string(),
+  "type": zod.enum(['start', 'end', 'userTask', 'serviceTask', 'gateway']),
+  "name": zod.string()
+})),
+  "edges": zod.array(zod.object({
+  "from": zod.string(),
+  "to": zod.string(),
+  "condition": zod.string().optional()
+}))
+}),
+  "message": zod.string()
+})
+
+
+/**
  * @summary Generate a technical specification from a BPMN graph
  */
 export const GenerateSpecBody = zod.object({

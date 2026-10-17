@@ -3,13 +3,20 @@ const names: Record<string, string> = {
   serviceTask: "Автоматическое действие", gateway: "Условие",
 };
 
-export function parseBpmnGraph(text: string): unknown {
+function parseModelJson(text: string): Record<string, unknown> {
   const cleaned = text.replace(/```(?:json)?/gi, "").trim();
   const start = cleaned.indexOf("{"), end = cleaned.lastIndexOf("}");
   if (start < 0 || end < start) throw new Error("No JSON object in model response.");
-  const parsed = JSON.parse(cleaned.slice(start, end + 1));
-  const graph = parsed?.graph ?? parsed;
-  if (!graph || !Array.isArray(graph.nodes) || !Array.isArray(graph.edges)) {
+  const parsed: unknown = JSON.parse(cleaned.slice(start, end + 1));
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("Model response must be a JSON object.");
+  }
+  return parsed as Record<string, unknown>;
+}
+
+function normalizeGraph(graph: unknown): unknown {
+  if (!graph || typeof graph !== "object" || !("nodes" in graph) ||
+    !("edges" in graph) || !Array.isArray(graph.nodes) || !Array.isArray(graph.edges)) {
     throw new Error("Missing nodes or edges.");
   }
   return {
@@ -21,5 +28,20 @@ export function parseBpmnGraph(text: string): unknown {
         ? n.name : typeof n.id === "string" && n.id.trim()
           ? n.id : names[String(n.type)] ?? "Действие" };
     }),
+  };
+}
+
+export function parseBpmnGraph(text: string): unknown {
+  const parsed = parseModelJson(text);
+  return normalizeGraph(parsed.graph ?? parsed);
+}
+
+export function parseBpmnRefinement(text: string): { graph: unknown; message: string } {
+  const parsed = parseModelJson(text);
+  return {
+    graph: normalizeGraph(parsed.graph),
+    message: typeof parsed.message === "string" && parsed.message.trim()
+      ? parsed.message.trim()
+      : "Уточнение учтено, диаграмма обновлена.",
   };
 }

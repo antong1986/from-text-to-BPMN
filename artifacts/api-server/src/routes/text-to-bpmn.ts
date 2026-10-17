@@ -1,15 +1,19 @@
 import { Router, type IRouter, type Request } from "express";
 import { fetchGeminiWithRetry } from "../lib/gemini-request";
 import { BPMN_RESPONSE_FORMAT } from "../lib/bpmn-response-format";
-import { parseBpmnGraph } from "../lib/parse-bpmn-graph";
+import { getRefinementIssue } from "../lib/bpmn-refinement";
+import { parseBpmnGraph, parseBpmnRefinement } from "../lib/parse-bpmn-graph";
 import {
   GenerateBpmnBody,
   GenerateBpmnResponse,
+  RefineBpmnBody,
+  RefineBpmnResponse,
   GenerateSpecBody,
   GenerateSpecResponse,
 } from "@workspace/api-zod";
 import {
   BPMN_GRAPH_SYSTEM_PROMPT,
+  BPMN_REFINEMENT_SYSTEM_PROMPT,
   BPMN_SPEC_SYSTEM_PROMPT,
 } from "../lib/text-to-bpmn-prompts";
 
@@ -165,6 +169,81 @@ router.post("/generate", async (req, res): Promise<void> => {
       "Gemini graph did not match the BPMN contract",
     );
     res.status(502).json({ error: "Gemini returned a graph in an invalid format." });
+    return;
+  }
+
+  res.json(output.data);
+});
+
+router.post("/refine", async (req, res): Promise<void> => {
+  const input = RefineBpmnBody.safeParse(req.body);
+  if (!input.success) {
+    res.status(400).json({ error: "A description, clarification, and BPMN graph are required." });
+    return;
+  }
+
+  const previousGraph = input.data.graph;
+  const result = await callModel(
+    [
+      { role: "system", content: BPMN_REFINEMENT_SYSTEM_PROMPT },
+      {
+        role: "user",
+        content: JSON.stringify({
+          description: input.data.description.trim(),
+          clarification: input.data.answer.trim(),
+          currentGraph: previousGraph,
+        }),
+      },
+    ],
+    req,
+    true,
+  );
+  if ("error" in result) {
+    res.status(result.status).json({ error: result.error });
+    return;
+  }
+
+  let refinement: { graph: unknown; message: string };
+  try {
+    refinement = parseBpmnRefinement(result.content);
+  } catch {
+    req.log.warn({ model: getAiModelName() }, "Gemini response was not a valid BPMN refinement");
+    res.status(502).json({ error: "Gemini did not return a valid BPMN graph update." });
+    return;
+  }
+
+  const output = RefineBpmnResponse.safeParse(refinement);
+  if (!output.success) {
+    req.log.warn(
+      { model: getAiModelName(), validation: output.error.message },
+      "Gemini refinement did not match the BPMN contract",
+    );
+    res.status(502).json({ error: "Gemini returned a graph update in an invalid format." });
+    return;
+  }
+
+  const updatedGraph = output.data.graph;
+  const refinementIssue = getRefinementIssue(previousGraph, updatedGraph);
+  if (refinementIssue === "removed-node") {
+    res.status(422).json({
+      error: "Уточнение не сохранило исходные элементы схемы. Повторите ответ или уточните, какую ветвь изменить.",
+    });
+    return;
+  }
+  if (refinementIssue === "invalid-graph") {
+    res.status(422).json({ error: "Уточнение создало некорректные связи. Исходная диаграмма сохранена." });
+    return;
+  }
+  if (refinementIssue === "removed-flow") {
+    res.status(422).json({
+      error: "Уточнение нарушило существующую ветвь процесса. Диаграмма сохранена без изменений.",
+    });
+    return;
+  }
+  if (refinementIssue === "unchanged") {
+    res.status(422).json({
+      error: "Модель не внесла изменение в диаграмму. Попробуйте описать, на каком шаге должна появиться новая ветвь или действие.",
+    });
     return;
   }
 

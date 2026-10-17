@@ -62,6 +62,48 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /refine:
+    post:
+      operationId: refineBpmn
+      tags: [text-to-bpmn]
+      summary: Apply a clarification to an existing BPMN graph
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BpmnRefineInput"
+      responses:
+        "200":
+          description: Updated process graph and validator response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BpmnRefineResponse"
+        "400":
+          description: Invalid request or incompatible graph update
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: The clarification did not change the graph
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: The AI provider returned an error or invalid graph
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: AI provider credentials are not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /generate-spec:
     post:
       operationId: generateSpec
@@ -114,6 +156,18 @@ components:
           type: string
           minLength: 1
       required: [description]
+    BpmnRefineInput:
+      type: object
+      properties:
+        description:
+          type: string
+          minLength: 1
+        answer:
+          type: string
+          minLength: 1
+        graph:
+          $ref: "#/components/schemas/BpmnGraph"
+      required: [description, answer, graph]
     BpmnNode:
       type: object
       properties:
@@ -153,6 +207,14 @@ components:
         graph:
           $ref: "#/components/schemas/BpmnGraph"
       required: [graph]
+    BpmnRefineResponse:
+      type: object
+      properties:
+        graph:
+          $ref: "#/components/schemas/BpmnGraph"
+        message:
+          type: string
+      required: [graph, message]
     BpmnSpecInput:
       type: object
       properties:

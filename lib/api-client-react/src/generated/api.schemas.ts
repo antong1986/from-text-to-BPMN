@@ -42,8 +42,21 @@ export interface BpmnGraph {
   edges: BpmnEdge[];
 }
 
+export interface BpmnRefineInput {
+  /** @minLength 1 */
+  description: string;
+  /** @minLength 1 */
+  answer: string;
+  graph: BpmnGraph;
+}
+
 export interface BpmnGenerateResponse {
   graph: BpmnGraph;
+}
+
+export interface BpmnRefineResponse {
+  graph: BpmnGraph;
+  message: string;
 }
 
 export interface BpmnSpecInput {

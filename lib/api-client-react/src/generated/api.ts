@@ -22,6 +22,8 @@ import type {
 import type {
   BpmnGenerateInput,
   BpmnGenerateResponse,
+  BpmnRefineInput,
+  BpmnRefineResponse,
   BpmnSpecInput,
   BpmnSpecResponse,
   ErrorResponse,
@@ -219,6 +221,94 @@ export const useGenerateBpmn = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getGenerateBpmnMutationOptions(options));
+    }
+
+export const getRefineBpmnUrl = () => {
+
+
+
+
+  return `/api/refine`
+}
+
+/**
+ * @summary Apply a clarification to an existing BPMN graph
+ */
+export const refineBpmn = async (bpmnRefineInput: BpmnRefineInput, options?: Parameters<typeof customFetch>[1]): Promise<BpmnRefineResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<BpmnRefineResponse>(getRefineBpmnUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(bpmnRefineInput)
+  }
+);}
+
+
+
+
+
+export const getRefineBpmnMutationKey = () => ['refineBpmn'] as const;
+
+export const getRefineBpmnMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof refineBpmn>>, TError,RefineBpmnMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof refineBpmn>>, TError,RefineBpmnMutationVariables, TContext> => {
+
+const mutationKey = getRefineBpmnMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof refineBpmn>>, RefineBpmnMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  refineBpmn(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RefineBpmnMutationResult = NonNullable<Awaited<ReturnType<typeof refineBpmn>>>
+    export type RefineBpmnMutationBody = BodyType<BpmnRefineInput>
+    export type RefineBpmnMutationError = ErrorType<ErrorResponse>
+    export type RefineBpmnMutationVariables = {data: BodyType<BpmnRefineInput>}
+
+    /**
+ * @summary Apply a clarification to an existing BPMN graph
+ */
+export const useRefineBpmn = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof refineBpmn>>, TError,RefineBpmnMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof refineBpmn>>,
+        TError,
+        RefineBpmnMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRefineBpmnMutationOptions(options));
     }
 
 export const getGenerateSpecUrl = () => {
