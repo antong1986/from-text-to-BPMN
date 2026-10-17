@@ -181,7 +181,7 @@ export default function App(){
           <button type="button" className="finish-btn" onClick={handleFinish} disabled={isScenarioFinished||chatMessages.length===0} title="Сценарий может быть завершен с ошибками" data-testid="button-finish-scenario">Завершить сценарий</button>
         </div>
         <div className="messages" data-testid="list-validator-messages">
-          {chatMessages.length===0?<p className="chat-empty" data-testid="empty-validator">Здесь появятся замечания и вопросы по сгенерированной схеме</p>:chatMessages.map((m,i)=><div key={i} className={`message-row ${m.sender}${m.canRollback?' has-rollback':''}`}><div className={`message ${m.sender}`} data-testid={`message-validator-${i}`}>{m.text}</div>{m.canRollback&&i===chatMessages.length-1&&rollbackSnapshot&&<button type="button" className="rollback-btn" onClick={handleRollback} data-testid="button-rollback-validator-step"><Undo2 size={12}/>Вернуться назад</button>}</div>)}
+          {chatMessages.length===0?<p className="chat-empty" data-testid="empty-validator">Здесь появятся замечания и вопросы<br/>по сгенерированной схеме</p>:chatMessages.map((m,i)=><div key={i} className={`message-row ${m.sender}${m.canRollback?' has-rollback':''}`}><div className={`message ${m.sender}`} data-testid={`message-validator-${i}`}>{m.text}</div>{m.canRollback&&i===chatMessages.length-1&&rollbackSnapshot&&<button type="button" className="rollback-btn" onClick={handleRollback} data-testid="button-rollback-validator-step"><Undo2 size={12}/>Вернуться назад</button>}</div>)}
           {isReplyPending&&<p className="generation-progress" role="status" data-testid="status-refining-diagram">Обновляю диаграмму по вашему уточнению…</p>}
           <div ref={messageEnd}/>
         </div>
