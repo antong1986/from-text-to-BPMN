@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mergeGraphs, generateBpmnXmlFromJson } from '../src/utils/bpmnBuilder.ts';
+import {
+  generateBpmnXmlFromJson,
+  mergeGraphs,
+  mergeRefinementGraphs,
+} from '../src/utils/bpmnBuilder.ts';
 
 const sample = {
   nodes: [
@@ -42,4 +46,62 @@ test('merge avoids IDs already named next_* and does not mutate input graphs', (
   assert.deepEqual(base, before);
   assert.deepEqual(sample, nextBefore);
   assert.doesNotThrow(() => generateBpmnXmlFromJson(result));
+});
+
+test('chat refinement preserves manually added elements and unrelated branches', () => {
+  const base = {
+    nodes: [
+      { id:'start',type:'start',name:'Начало' },
+      { id:'manual_check',type:'userTask',name:'Моя ручная проверка' },
+      { id:'decision',type:'gateway',name:'Есть товар?' },
+      { id:'finish',type:'end',name:'Готово' },
+    ],
+    edges: [
+      { from:'start',to:'manual_check' },
+      { from:'manual_check',to:'decision' },
+      { from:'decision',to:'finish',condition:'Да' },
+      { from:'decision',to:'manual_check',condition:'Нет' },
+    ],
+  };
+  const refined = {
+    nodes: [
+      ...base.nodes,
+      { id:'return_to_stock',type:'serviceTask',name:'Вернуть на склад' },
+    ],
+    edges: [
+      { from:'start',to:'manual_check' },
+      { from:'manual_check',to:'decision' },
+      { from:'decision',to:'return_to_stock',condition:'Да' },
+      { from:'return_to_stock',to:'finish' },
+      { from:'decision',to:'manual_check',condition:'Нет' },
+    ],
+  };
+
+  const merged = mergeRefinementGraphs(base,refined);
+  assert.deepEqual(merged.nodes.find(node=>node.id==='manual_check'),base.nodes[1]);
+  assert.ok(merged.nodes.some(node=>node.id==='return_to_stock'));
+  assert.ok(merged.edges.some(edge=>edge.from==='decision'&&edge.to==='return_to_stock'&&edge.condition==='Да'));
+  assert.ok(merged.edges.some(edge=>edge.from==='return_to_stock'&&edge.to==='finish'));
+  assert.ok(merged.edges.some(edge=>edge.from==='decision'&&edge.to==='manual_check'&&edge.condition==='Нет'));
+  assert.equal(merged.edges.some(edge=>edge.from==='decision'&&edge.to==='finish'&&edge.condition==='Да'),false);
+});
+
+test('refinement XML generation keeps existing node bounds and avoids overlapping additions', () => {
+  const graph = {
+    nodes: [
+      { id:'start',type:'start',name:'Начало' },
+      { id:'new_task',type:'userTask',name:'Новая задача' },
+      { id:'end',type:'end',name:'Завершение' },
+    ],
+    edges: [{from:'start',to:'new_task'},{from:'new_task',to:'end'}],
+  };
+  const layout = new Map([
+    ['start',{x:100,y:100,width:36,height:36}],
+    ['end',{x:300,y:100,width:36,height:36}],
+  ]);
+
+  const xml = generateBpmnXmlFromJson(graph,layout);
+  assert.match(xml,/<dc:Bounds x="100" y="100" width="36" height="36" \/>/);
+  assert.match(xml,/<dc:Bounds x="300" y="100" width="36" height="36" \/>/);
+  assert.match(xml,/<dc:Bounds x="290" y="[^1]/);
 });

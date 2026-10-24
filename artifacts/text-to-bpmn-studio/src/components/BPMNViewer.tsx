@@ -16,15 +16,36 @@ type EventBusApi = {
 type CreateApi = {start:(event:Event,element:unknown)=>void};
 type ElementFactoryApi = {createShape:(attributes:{type:ShapeType})=>unknown};
 
-export default function BPMNViewer({xml}:{xml:string}) {
+export default function BPMNViewer({
+  xml,
+  importVersion,
+  onXmlChange,
+  onRegisterXmlFlush,
+}:{
+  xml:string;
+  importVersion:number;
+  onXmlChange:(xml:string)=>void;
+  onRegisterXmlFlush:(flush:(()=>Promise<string>)|null)=>void;
+}) {
   const host = useRef<HTMLDivElement>(null);
   const chooser = useRef<HTMLDivElement>(null);
   const chooserTrigger = useRef<HTMLElement|null>(null);
   const modeler = useRef<BpmnModeler|null>(null);
+  const incomingXml = useRef(xml);
+  const onXmlChangeRef = useRef(onXmlChange);
+  const onRegisterXmlFlushRef = useRef(onRegisterXmlFlush);
+  const importing = useRef(false);
+  const importRequestId = useRef(0);
+  const importPromise = useRef<Promise<void>>(Promise.resolve());
+  const exportRequestId = useRef(0);
+  const exportTimer = useRef<number|undefined>(undefined);
   const [chooserKind,setChooserKind] = useState<ChooserKind|null>(null);
   const [chooserPosition,setChooserPosition] = useState<ChooserPosition>({left:68,top:8});
   const [renderError,setRenderError] = useState('');
   const [exportError,setExportError] = useState('');
+  incomingXml.current=xml;
+  onXmlChangeRef.current=onXmlChange;
+  onRegisterXmlFlushRef.current=onRegisterXmlFlush;
   useEffect(()=>{
     if(!host.current) return;
     const instance = new BpmnModeler({
@@ -33,6 +54,31 @@ export default function BPMNViewer({xml}:{xml:string}) {
     });
     modeler.current=instance;
     const eventBus=instance.get('eventBus') as EventBusApi;
+    const flushXml=async()=>{
+      exportRequestId.current++;
+      if(exportTimer.current!==undefined)window.clearTimeout(exportTimer.current);
+      await importPromise.current;
+      const result=await instance.saveXML({format:true});
+      const savedXml=result.xml??incomingXml.current;
+      if(result.xml)onXmlChangeRef.current(result.xml);
+      return savedXml;
+    };
+    onRegisterXmlFlushRef.current(flushXml);
+    const saveManualChanges=()=>{
+      if(importing.current)return;
+      const requestId=++exportRequestId.current;
+      if(exportTimer.current!==undefined)window.clearTimeout(exportTimer.current);
+      exportTimer.current=window.setTimeout(async()=>{
+        try {
+          const result=await instance.saveXML({format:true});
+          if(requestId!==exportRequestId.current||importing.current||!result.xml)return;
+          onXmlChangeRef.current(result.xml);
+        } catch(error) {
+          console.error('Не удалось сохранить изменения диаграммы:',error);
+        }
+      },120);
+    };
+    eventBus.on('commandStack.changed',saveManualChanges);
     const toggleChooser=(kind:ChooserKind)=>( {sourceEvent}:ChooserEvent )=>{
       const stage=host.current;
       if(!stage)return;
@@ -62,6 +108,9 @@ export default function BPMNViewer({xml}:{xml:string}) {
     return ()=>{
       eventBus.off('taskChooser.toggle',toggleTaskChooser);
       eventBus.off('gatewayChooser.toggle',toggleGatewayChooser);
+      eventBus.off('commandStack.changed',saveManualChanges);
+      if(exportTimer.current!==undefined)window.clearTimeout(exportTimer.current);
+      onRegisterXmlFlushRef.current(null);
       instance.destroy();
       modeler.current=null;
     };
@@ -87,14 +136,28 @@ export default function BPMNViewer({xml}:{xml:string}) {
     };
   },[chooserKind]);
   useEffect(()=>{
+    const requestId=++importRequestId.current;
+    exportRequestId.current++;
+    if(exportTimer.current!==undefined)window.clearTimeout(exportTimer.current);
     let disposed=false;
     const render=async()=>{
       if(!modeler.current)return;
-      try { await modeler.current.importXML(xml); if(disposed)return; setRenderError(''); modeler.current.get<CanvasApi>('canvas').zoom('fit-viewport'); }
-      catch(error){ if(!disposed){ console.error('Ошибка BPMN:',error);setRenderError('Не удалось отобразить диаграмму. Проверьте структуру схемы.'); } }
+      importing.current=true;
+      try {
+        await modeler.current.importXML(incomingXml.current);
+        if(disposed)return;
+        setRenderError('');
+        modeler.current.get<CanvasApi>('canvas').zoom('fit-viewport');
+      }catch(error){
+        if(!disposed){ console.error('Ошибка BPMN:',error);setRenderError('Не удалось отобразить диаграмму. Проверьте структуру схемы.'); }
+      }finally{
+        if(requestId===importRequestId.current)importing.current=false;
+      }
     };
-    void render(); return ()=>{disposed=true;};
-  },[xml]);
+    importPromise.current=render();
+    void importPromise.current;
+    return ()=>{disposed=true;};
+  },[importVersion]);
   const createShape=(type:ShapeType,event:ReactMouseEvent<HTMLButtonElement>)=>{
     event.stopPropagation();
     const instance=modeler.current;

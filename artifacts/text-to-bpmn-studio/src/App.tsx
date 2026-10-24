@@ -3,7 +3,13 @@ import { Check, Network, Paperclip, Send, Undo2 } from 'lucide-react';
 import { useGenerateBpmn, useRefineBpmn, useUploadDocument, type BpmnGraph } from '@workspace/api-client-react';
 import BPMNViewer from './components/BPMNViewer';
 import SpecExportButton from './components/SpecExportButton';
-import { generateBpmnXmlFromJson, mergeGraphs } from './utils/bpmnBuilder';
+import {
+  extractBpmnXmlModel,
+  generateBpmnXmlFromJson,
+  mergeGraphs,
+  mergeRefinementGraphs,
+  mergeRefinementXml,
+} from './utils/bpmnBuilder';
 import { MINIMAL_BPMN_XML } from './utils/mockBpmn';
 import { generateSqlSchema } from './utils/generateSqlSchema';
 import { parseGeneratedGraph } from './utils/parseGeneratedGraph';
@@ -45,6 +51,7 @@ function documentErrorMessage(error: unknown): string {
 export default function App(){
   const [userInput,setUserInput]=useState('');
   const [currentXml,setCurrentXml]=useState(MINIMAL_BPMN_XML);
+  const [diagramImportVersion,setDiagramImportVersion]=useState(0);
   const [graph,setGraph]=useState<BpmnGraph>({nodes:[],edges:[]});
   const [hasGenerated,setHasGenerated]=useState(false);
   const [chatMessages,setChatMessages]=useState<ChatMessage[]>([]);
@@ -61,6 +68,8 @@ export default function App(){
   const [isResizing,setIsResizing]=useState(false);
   const replyRequestId=useRef(0);
   const uploadRequestId=useRef(0);
+  const currentXmlRef=useRef(MINIMAL_BPMN_XML);
+  const flushDiagramXml=useRef<(()=>Promise<string>)|null>(null);
   const documentInput=useRef<HTMLInputElement>(null);
   const messageEnd=useRef<HTMLDivElement>(null);
   const generate=useGenerateBpmn();
@@ -69,6 +78,20 @@ export default function App(){
   const busy=generate.isPending;
   const hasAiMessage=chatMessages.some(m=>m.sender==='ai');
   const hasTextToClear=Boolean(userInput||chatInput||chatMessages.length||aiError);
+  const replaceDiagramXml=(xml:string)=>{
+    currentXmlRef.current=xml;
+    setCurrentXml(xml);
+    setDiagramImportVersion(version=>version+1);
+  };
+  const handleModelerXmlChange=(xml:string)=>{
+    currentXmlRef.current=xml;
+    setCurrentXml(xml);
+    try { setGraph(extractBpmnXmlModel(xml).graph); }
+    catch(error) { console.error('Не удалось синхронизировать граф с холстом:',error); }
+  };
+  const registerDiagramXmlFlush=(flush:(()=>Promise<string>)|null)=>{
+    flushDiagramXml.current=flush;
+  };
 
   useEffect(()=>{messageEnd.current?.scrollIntoView({behavior:'smooth'});},[chatMessages]);
   useEffect(()=>()=>{replyRequestId.current+=1;uploadRequestId.current+=1;},[]);
@@ -85,7 +108,7 @@ export default function App(){
     const generatedGraph=parseGeneratedGraph(response);
     const combined=hasGenerated?mergeGraphs(graph,generatedGraph):generatedGraph;
     const xml=generateBpmnXmlFromJson(combined);
-    setUserInput(description);setGraph(combined);setCurrentXml(xml);setHasGenerated(true);
+    setUserInput(description);setGraph(combined);replaceDiagramXml(xml);setHasGenerated(true);
     const task=combined.nodes.find(n=>n.type==='userTask'||n.type==='serviceTask')?.name||'этого этапа';
     const question=QUESTIONS[Math.floor(Math.random()*QUESTIONS.length)].replace('{{task}}',task);
     setChatMessages([{sender:'ai',text:question}]);setChatInput('');setIsValidated(false);
@@ -125,27 +148,33 @@ export default function App(){
   };
   const handleReply=async()=>{
     const answer=chatInput.trim();if(!answer||!hasAiMessage||isReplyPending)return;
-    setRollbackSnapshot({
-      graph:{nodes:graph.nodes.map(node=>({...node})),edges:graph.edges.map(edge=>({...edge}))},
-      xml:currentXml,
-      chatMessages:chatMessages.map(message=>({...message})),
-      isValidated,
-      isScenarioFinished,
-      sqlSchema,
-    });
     setChatMessages(v=>[...v,{sender:'user',text:answer}]);setChatInput('');setIsScenarioFinished(false);
     setIsReplyPending(true);
     const requestId=++replyRequestId.current;
+    setRollbackSnapshot(null);
     try{
+      const baselineXml=await flushDiagramXml.current?.()??currentXmlRef.current;
+      const baselineModel=extractBpmnXmlModel(baselineXml);
+      const baselineGraph=baselineModel.graph;
+      setGraph(baselineGraph);
+      setRollbackSnapshot({
+        graph:{nodes:baselineGraph.nodes.map(node=>({...node})),edges:baselineGraph.edges.map(edge=>({...edge}))},
+        xml:baselineXml,
+        chatMessages:chatMessages.map(message=>({...message})),
+        isValidated,
+        isScenarioFinished,
+        sqlSchema,
+      });
       const result=await refine.mutateAsync({data:{
         description:userInput.trim(),
         answer,
-        graph,
+        graph:baselineGraph,
       }});
       if(requestId!==replyRequestId.current)return;
       const updatedGraph=parseGeneratedGraph(result.graph);
-      const updatedXml=generateBpmnXmlFromJson(updatedGraph);
-      setGraph(updatedGraph);setCurrentXml(updatedXml);
+      const mergedGraph=mergeRefinementGraphs(baselineGraph,updatedGraph);
+      const updatedXml=mergeRefinementXml(baselineXml,baselineModel,updatedGraph);
+      setGraph(mergedGraph);replaceDiagramXml(updatedXml);
       setChatMessages(v=>[...v,{sender:'ai',text:result.message,canRollback:true}]);
       setIsValidated(true);setSqlSchema(null);
     }catch(error){
@@ -159,7 +188,7 @@ export default function App(){
     if(!rollbackSnapshot)return;
     replyRequestId.current+=1;
     setGraph(rollbackSnapshot.graph);
-    setCurrentXml(rollbackSnapshot.xml);
+    replaceDiagramXml(rollbackSnapshot.xml);
     setChatMessages(rollbackSnapshot.chatMessages);
     setIsValidated(rollbackSnapshot.isValidated);
     setIsScenarioFinished(rollbackSnapshot.isScenarioFinished);
@@ -180,7 +209,7 @@ export default function App(){
   const handleClearCanvas=()=>{
     uploadRequestId.current+=1;
     replyRequestId.current+=1;
-    setCurrentXml(MINIMAL_BPMN_XML);setGraph({nodes:[],edges:[]});setHasGenerated(false);setChatMessages([]);
+    replaceDiagramXml(MINIMAL_BPMN_XML);setGraph({nodes:[],edges:[]});setHasGenerated(false);setChatMessages([]);
     setChatInput('');setIsValidated(false);setIsScenarioFinished(false);setSqlSchema(null);setRollbackSnapshot(null);setIsReplyPending(false);setIsDocumentUploading(false);
   };
   const copySql=async()=>{
@@ -252,7 +281,12 @@ export default function App(){
         </div>
       </header>
       <div className="canvas-wrap" data-testid="panel-bpmn-canvas">
-        <BPMNViewer xml={currentXml}/>
+        <BPMNViewer
+          xml={currentXml}
+          importVersion={diagramImportVersion}
+          onXmlChange={handleModelerXmlChange}
+          onRegisterXmlFlush={registerDiagramXmlFlush}
+        />
         <button type="button" className="canvas-clear" onClick={handleClearCanvas} disabled={!hasGenerated} data-testid="button-clear-canvas">Очистить холст</button>
       </div>
       <footer className="footer-note"><span data-testid="status-validation">{isValidated?<><Check size={11} style={{verticalAlign:'-2px',marginRight:4}}/>ЛОГИКА ПОДТВЕРЖДЕНА</>:'ОЖИДАЕТ ПРОВЕРКИ ВАЛИДАТОРОМ'}</span><span>ЧЕРТЁЖ BPMN 2.0</span></footer>

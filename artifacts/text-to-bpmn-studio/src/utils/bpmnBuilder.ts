@@ -181,6 +181,220 @@ export function extractGraphFromXml(xml: string): BpmnGraph {
   return extractBpmnXmlModel(xml).graph;
 }
 
+function sameEdge(left:BpmnEdge,right:BpmnEdge):boolean {
+  return left.from===right.from&&left.to===right.to&&(left.condition??'')===(right.condition??'');
+}
+
+function graphPathExists(graph:BpmnGraph,start:string,target:string):boolean {
+  const queue=[start],visited=new Set<string>();
+  while(queue.length) {
+    const current=queue.shift()!;
+    if(current===target)return true;
+    if(visited.has(current))continue;
+    visited.add(current);
+    graph.edges.filter(edge=>edge.from===current).forEach(edge=>queue.push(edge.to));
+  }
+  return false;
+}
+
+export function mergeRefinementGraphs(base:BpmnGraph,refined:BpmnGraph):BpmnGraph {
+  validate(base);
+  validate(refined);
+  const refinedById=new Map(refined.nodes.map(node=>[node.id,node]));
+  const nodes=base.nodes.map(node=>{
+    const refinement=refinedById.get(node.id);
+    return {...node,...(refinement?.name?{name:refinement.name}:{})};
+  });
+  const nodeIds=new Set(nodes.map(node=>node.id));
+  refined.nodes.filter(node=>!nodeIds.has(node.id)).forEach(node=>nodes.push({...node}));
+
+  const edges=base.edges.map(edge=>({...edge}));
+  const consumedRefinements=new Set<number>();
+  base.edges.forEach((baseEdge,index)=>{
+    const exactIndex=refined.edges.findIndex((edge,i)=>!consumedRefinements.has(i)&&sameEdge(baseEdge,edge));
+    if(exactIndex>=0) {
+      consumedRefinements.add(exactIndex);
+      return;
+    }
+    const sameEndpointsIndex=refined.edges.findIndex((edge,i)=>
+      !consumedRefinements.has(i)&&edge.from===baseEdge.from&&edge.to===baseEdge.to,
+    );
+    if(sameEndpointsIndex>=0) {
+      edges[index]={from:baseEdge.from,to:baseEdge.to,...(refined.edges[sameEndpointsIndex].condition?{condition:refined.edges[sameEndpointsIndex].condition}:{})};
+      consumedRefinements.add(sameEndpointsIndex);
+      return;
+    }
+    const insertedNodeIndex=refined.edges.findIndex((edge,i)=>
+      !consumedRefinements.has(i)&&edge.from===baseEdge.from&&edge.to!==baseEdge.to&&
+      (edge.condition??'')===(baseEdge.condition??'')&&graphPathExists(refined,edge.to,baseEdge.to),
+    );
+    if(insertedNodeIndex>=0) {
+      const insertedEdge=refined.edges[insertedNodeIndex];
+      edges[index]={from:baseEdge.from,to:insertedEdge.to,...(insertedEdge.condition??baseEdge.condition?{condition:insertedEdge.condition??baseEdge.condition}:{})};
+      consumedRefinements.add(insertedNodeIndex);
+    }
+  });
+  refined.edges.forEach((edge,index)=>{
+    if(consumedRefinements.has(index)||edges.some(existing=>sameEdge(existing,edge)))return;
+    edges.push({...edge});
+  });
+  return {nodes,edges};
+}
+
+function findBpmnElement(root:Element,localName:string,id:string):Element|undefined {
+  return Array.from(root.getElementsByTagNameNS(BPMN_NS,localName)).find(element=>element.getAttribute('id')===id);
+}
+
+function findDiElement(root:Element,localName:string,attribute:string,value:string):Element|undefined {
+  return Array.from(root.getElementsByTagNameNS(BPMNDI_NS,localName)).find(element=>element.getAttribute(attribute)===value);
+}
+
+function childElements(element:Element):Element[] {
+  return Array.from(element.childNodes).filter(child=>child.nodeType===1) as Element[];
+}
+
+function makeUniqueId(preferred:string,used:Set<string>):string {
+  const normalized=preferred.replace(/[^A-Za-z0-9_.-]/g,'_');
+  const base=/^[A-Za-z_]/.test(normalized)?normalized:`Bpmn_${normalized}`;
+  let result=base,index=1;
+  while(used.has(result))result=`${base}_${index++}`;
+  used.add(result);
+  return result;
+}
+
+function setFlowCondition(flow:Element,condition:string|undefined):void {
+  if(condition)flow.setAttribute('name',condition);
+  else flow.removeAttribute('name');
+}
+
+function copyCandidateWaypoints(doc:XMLDocument,target:Element,candidate:Element):void {
+  Array.from(target.getElementsByTagNameNS(DI_NS,'waypoint')).forEach(waypoint=>waypoint.parentNode?.removeChild(waypoint));
+  Array.from(candidate.getElementsByTagNameNS(DI_NS,'waypoint')).forEach(waypoint=>{
+    target.appendChild(doc.importNode(waypoint,true));
+  });
+}
+
+function insertFlowReference(doc:XMLDocument,element:Element,kind:'incoming'|'outgoing',flowId:string):void {
+  const reference=doc.createElementNS(BPMN_NS,`bpmn:${kind}`);
+  reference.textContent=flowId;
+  const firstNonReference=childElements(element).find(child=>child.localName!=='incoming'&&child.localName!=='outgoing');
+  element.insertBefore(reference,firstNonReference??null);
+}
+
+export function mergeRefinementXml(
+  xml:string,
+  baseModel:BpmnXmlModel,
+  refinedGraph:BpmnGraph,
+):string {
+  const mergedGraph=mergeRefinementGraphs(baseModel.graph,refinedGraph);
+  const doc=parseXmlDocument(xml);
+  const process=Array.from(doc.getElementsByTagNameNS(BPMN_NS,'process'))[0];
+  const plane=Array.from(doc.getElementsByTagNameNS(BPMNDI_NS,'BPMNPlane'))[0];
+  if(!process||!plane)throw new Error('В XML не найдены элементы процесса или диаграммы BPMN.');
+
+  const candidateDoc=parseXmlDocument(generateBpmnXmlFromJson(mergedGraph,baseModel.bounds));
+  const candidateProcess=Array.from(candidateDoc.getElementsByTagNameNS(BPMN_NS,'process'))[0];
+  const candidatePlane=Array.from(candidateDoc.getElementsByTagNameNS(BPMNDI_NS,'BPMNPlane'))[0];
+  if(!candidateProcess||!candidatePlane)throw new Error('Не удалось подготовить XML для уточнения диаграммы.');
+
+  const usedIds=new Set(Array.from(doc.getElementsByTagName('*')).map(element=>element.getAttribute('id')).filter(Boolean) as string[]);
+  const graphToXmlId=new Map(baseModel.nodeXmlIds);
+  const graphToElement=new Map<string,Element>();
+  graphToXmlId.forEach((xmlId,graphId)=>{
+    const element=Array.from(process.getElementsByTagName('*')).find(candidate=>candidate.namespaceURI===BPMN_NS&&candidate.getAttribute('id')===xmlId);
+    if(element)graphToElement.set(graphId,element);
+  });
+  const candidateNodeXmlIds=new Map(mergedGraph.nodes.map((node,index)=>[node.id,`Node_${index+1}`]));
+  mergedGraph.nodes.forEach(node=>{
+    if(graphToXmlId.has(node.id)) {
+      const existing=graphToElement.get(node.id);
+      if(existing&&node.name&&existing.getAttribute('name')!==node.name)existing.setAttribute('name',node.name);
+      return;
+    }
+    const candidateId=candidateNodeXmlIds.get(node.id)!;
+    const candidateNode=findBpmnElement(candidateProcess,'*',candidateId) ??
+      Array.from(candidateProcess.getElementsByTagName('*')).find(element=>element.namespaceURI===BPMN_NS&&element.getAttribute('id')===candidateId);
+    if(!candidateNode)throw new Error(`Не удалось создать узел ${node.id}.`);
+    const xmlId=makeUniqueId(node.id,usedIds);
+    const created=doc.importNode(candidateNode,true) as Element;
+    created.setAttribute('id',xmlId);
+    childElements(created).filter(child=>child.localName==='incoming'||child.localName==='outgoing').forEach(child=>child.parentNode?.removeChild(child));
+    process.appendChild(created);
+    graphToXmlId.set(node.id,xmlId);
+    graphToElement.set(node.id,created);
+
+    const candidateShape=findDiElement(candidatePlane,'BPMNShape','bpmnElement',candidateId);
+    if(candidateShape) {
+      const shape=doc.importNode(candidateShape,true) as Element;
+      shape.setAttribute('id',makeUniqueId(`${xmlId}_di`,usedIds));
+      shape.setAttribute('bpmnElement',xmlId);
+      plane.appendChild(shape);
+    }
+  });
+
+  const candidateFlowIds=new Map(mergedGraph.edges.map((_,index)=>[index,`Flow_${index+1}`]));
+  const flowIdsByGraphIndex=new Map<number,string>();
+  const managedFlowIds=new Set(baseModel.edgeXmlIds);
+  baseModel.graph.edges.forEach((oldEdge,index)=>{
+    const flowId=baseModel.edgeXmlIds[index];
+    const flow=Array.from(process.getElementsByTagNameNS(BPMN_NS,'sequenceFlow')).find(element=>element.getAttribute('id')===flowId);
+    if(!flow)return;
+    const nextEdge=mergedGraph.edges[index];
+    const nextSource=graphToXmlId.get(nextEdge.from),nextTarget=graphToXmlId.get(nextEdge.to);
+    if(!nextSource||!nextTarget)throw new Error('Связь уточнения ссылается на неизвестный узел.');
+    flow.setAttribute('sourceRef',nextSource);
+    flow.setAttribute('targetRef',nextTarget);
+    setFlowCondition(flow,nextEdge.condition);
+    flowIdsByGraphIndex.set(index,flowId);
+    const changed=!sameEdge(oldEdge,nextEdge);
+    if(changed) {
+      const currentDi=findDiElement(plane,'BPMNEdge','bpmnElement',flowId);
+      const candidateDi=findDiElement(candidatePlane,'BPMNEdge','bpmnElement',candidateFlowIds.get(index)!);
+      if(currentDi&&candidateDi)copyCandidateWaypoints(doc,currentDi,candidateDi);
+    }
+  });
+
+  mergedGraph.edges.forEach((edge,index)=>{
+    if(flowIdsByGraphIndex.has(index))return;
+    const candidateId=candidateFlowIds.get(index)!;
+    const candidateFlow=Array.from(candidateProcess.getElementsByTagNameNS(BPMN_NS,'sequenceFlow')).find(element=>element.getAttribute('id')===candidateId);
+    if(!candidateFlow)throw new Error(`Не удалось создать поток ${index+1}.`);
+    const sourceRef=graphToXmlId.get(edge.from),targetRef=graphToXmlId.get(edge.to);
+    if(!sourceRef||!targetRef)throw new Error('Связь уточнения ссылается на неизвестный узел.');
+    const flowId=makeUniqueId(candidateId,usedIds);
+    const flow=doc.importNode(candidateFlow,true) as Element;
+    flow.setAttribute('id',flowId);
+    flow.setAttribute('sourceRef',sourceRef);
+    flow.setAttribute('targetRef',targetRef);
+    setFlowCondition(flow,edge.condition);
+    process.appendChild(flow);
+    flowIdsByGraphIndex.set(index,flowId);
+    managedFlowIds.add(flowId);
+
+    const candidateDi=findDiElement(candidatePlane,'BPMNEdge','bpmnElement',candidateId);
+    if(candidateDi) {
+      const di=doc.importNode(candidateDi,true) as Element;
+      di.setAttribute('id',makeUniqueId(`${flowId}_di`,usedIds));
+      di.setAttribute('bpmnElement',flowId);
+      plane.appendChild(di);
+    }
+  });
+
+  graphToElement.forEach(element=>{
+    childElements(element).filter(child=>
+      (child.localName==='incoming'||child.localName==='outgoing')&&managedFlowIds.has(child.textContent?.trim()??''),
+    ).forEach(child=>child.parentNode?.removeChild(child));
+  });
+  mergedGraph.edges.forEach((edge,index)=>{
+    const flowId=flowIdsByGraphIndex.get(index);
+    const source=graphToElement.get(edge.from),target=graphToElement.get(edge.to);
+    if(!flowId||!source||!target)throw new Error('Не удалось восстановить входящие и исходящие связи.');
+    insertFlowReference(doc,source,'outgoing',flowId);
+    insertFlowReference(doc,target,'incoming',flowId);
+  });
+  return new XMLSerializer().serializeToString(doc);
+}
+
 export function mergeGraphs(base: BpmnGraph, next: BpmnGraph): BpmnGraph {
   if (!base.nodes.length) return next;
   validate(base);
