@@ -237,7 +237,8 @@ export default function App(){
         </div>
         <div className="description-import-row">
           <button type="button" className="import-btn" onClick={()=>documentInput.current?.click()} disabled={busy||isDocumentUploading} data-testid="button-import-document">
-            <Paperclip size={13}/>{isDocumentUploading?'Обрабатываю документ…':'Импорт документа'}
+            {isDocumentUploading?<span className="spin import-spinner" aria-hidden="true"/>:<Paperclip size={13}/>}
+            {isDocumentUploading?'Обрабатываю документ…':'Импорт документа'}
           </button>
           <span className="import-note">DOCX, TXT · до 5 МБ</span>
           <input ref={documentInput} type="file" accept=".docx,.txt,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" hidden aria-label="Выбрать DOCX или TXT файл" data-testid="input-import-document" onChange={event=>{
@@ -246,7 +247,12 @@ export default function App(){
             event.target.value='';
           }}/>
         </div>
-        <textarea className="description" value={userInput} onChange={e=>setUserInput(e.target.value)} placeholder="Например: Клиент отправляет заявку, менеджер проверяет её и, если всё корректно, передаёт в отдел исполнения…" disabled={isDocumentUploading} data-testid="input-process-description" aria-label="Описание процесса"/>
+        <div className={`description-wrap${busy?' is-generating':''}`} aria-busy={busy} data-testid="description-loading-state">
+          <textarea className={`description${busy?' is-blurred':''}`} value={userInput} onChange={e=>setUserInput(e.target.value)} placeholder="Например: Клиент отправляет заявку, менеджер проверяет её и, если всё корректно, передаёт в отдел исполнения…" disabled={isDocumentUploading||busy} data-testid="input-process-description" aria-label="Описание процесса"/>
+          {busy&&<span className="description-loader" role="status" aria-label="ИИ проектирует процесс">
+            <span className="spin description-spinner" aria-hidden="true"/>
+          </span>}
+        </div>
         <button type="button" className="primary-btn" style={{width:'100%'}} onClick={()=>void handleGenerate()} disabled={busy||isDocumentUploading||!userInput.trim()} data-testid="button-generate-bpmn">
           {isDocumentUploading?'Импортирую документ…':busy?'ИИ проектирует процесс…':'Сгенерировать диаграмму'}
         </button>
