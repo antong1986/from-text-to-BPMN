@@ -285,6 +285,7 @@ export function mergeRefinementXml(
   xml:string,
   baseModel:BpmnXmlModel,
   refinedGraph:BpmnGraph,
+  layoutOverrides:ReadonlyMap<string,NodeBounds>=baseModel.bounds,
 ):string {
   const mergedGraph=mergeRefinementGraphs(baseModel.graph,refinedGraph);
   const doc=parseXmlDocument(xml);
@@ -292,7 +293,7 @@ export function mergeRefinementXml(
   const plane=Array.from(doc.getElementsByTagNameNS(BPMNDI_NS,'BPMNPlane'))[0];
   if(!process||!plane)throw new Error('В XML не найдены элементы процесса или диаграммы BPMN.');
 
-  const candidateDoc=parseXmlDocument(generateBpmnXmlFromJson(mergedGraph,baseModel.bounds));
+  const candidateDoc=parseXmlDocument(generateBpmnXmlFromJson(mergedGraph,layoutOverrides));
   const candidateProcess=Array.from(candidateDoc.getElementsByTagNameNS(BPMN_NS,'process'))[0];
   const candidatePlane=Array.from(candidateDoc.getElementsByTagNameNS(BPMNDI_NS,'BPMNPlane'))[0];
   if(!candidateProcess||!candidatePlane)throw new Error('Не удалось подготовить XML для уточнения диаграммы.');
@@ -393,6 +394,98 @@ export function mergeRefinementXml(
     insertFlowReference(doc,target,'incoming',flowId);
   });
   return new XMLSerializer().serializeToString(doc);
+}
+
+export function stackGraphBelow(
+  baseGraph:BpmnGraph,
+  nextGraph:BpmnGraph,
+  baseBounds:ReadonlyMap<string,NodeBounds>,
+  nextBounds:ReadonlyMap<string,NodeBounds>,
+  baseBottom:number,
+  verticalGap=160,
+):{graph:BpmnGraph;layoutOverrides:Map<string,NodeBounds>} {
+  validate(baseGraph);
+  validate(nextGraph);
+  if(!Number.isFinite(baseBottom))throw new Error('Не удалось определить нижнюю границу существующей схемы.');
+
+  const usedIds=new Set(baseGraph.nodes.map(node=>node.id));
+  let batch=1;
+  let remappedIds=new Map<string,string>();
+  while(true) {
+    remappedIds=new Map(nextGraph.nodes.map(node=>[node.id,`description_${batch}_${node.id}`]));
+    if([...remappedIds.values()].every(id=>!usedIds.has(id)))break;
+    batch++;
+  }
+
+  const sourceBounds=nextGraph.nodes.map(node=>nextBounds.get(node.id));
+  if(sourceBounds.some(bounds=>!bounds))throw new Error('Не удалось определить расположение нового процесса.');
+  const nextTop=Math.min(...sourceBounds.map(bounds=>bounds!.y));
+  const verticalOffset=baseBottom+verticalGap-nextTop;
+  const layoutOverrides=new Map(baseBounds);
+  nextGraph.nodes.forEach(node=>{
+    const bounds=nextBounds.get(node.id)!;
+    layoutOverrides.set(remappedIds.get(node.id)!,{...bounds,y:bounds.y+verticalOffset});
+  });
+
+  return {
+    graph:{
+      nodes:[
+        ...baseGraph.nodes.map(node=>({...node})),
+        ...nextGraph.nodes.map(node=>({...node,id:remappedIds.get(node.id)!})),
+      ],
+      edges:[
+        ...baseGraph.edges.map(edge=>({...edge})),
+        ...nextGraph.edges.map(edge=>({
+          ...edge,
+          from:remappedIds.get(edge.from)!,
+          to:remappedIds.get(edge.to)!,
+        })),
+      ],
+    },
+    layoutOverrides,
+  };
+}
+
+function getShapeBoundsByElementId(xml:string):Map<string,NodeBounds> {
+  const doc=parseXmlDocument(xml);
+  const result=new Map<string,NodeBounds>();
+  Array.from(doc.getElementsByTagNameNS(BPMNDI_NS,'BPMNShape')).forEach(shape=>{
+    const elementId=shape.getAttribute('bpmnElement');
+    const bounds=shape.getElementsByTagNameNS(DC_NS,'Bounds')[0];
+    if(!elementId||!bounds)return;
+    const x=Number(bounds.getAttribute('x')),y=Number(bounds.getAttribute('y'));
+    const width=Number(bounds.getAttribute('width')),height=Number(bounds.getAttribute('height'));
+    if([x,y,width,height].every(Number.isFinite))result.set(elementId,{x,y,width,height});
+  });
+  return result;
+}
+
+export function appendGraphBelowXml(xml:string,nextGraph:BpmnGraph):{graph:BpmnGraph;xml:string} {
+  const baseModel=extractBpmnXmlModel(xml);
+  if(!baseModel.graph.nodes.length) {
+    return {graph:nextGraph,xml:generateBpmnXmlFromJson(nextGraph)};
+  }
+
+  const nextXml=generateBpmnXmlFromJson(nextGraph);
+  const nextShapeBounds=getShapeBoundsByElementId(nextXml);
+  const nextBounds=new Map(nextGraph.nodes.map((node,index)=>{
+    const bounds=nextShapeBounds.get(`Node_${index+1}`);
+    if(!bounds)throw new Error(`Не удалось определить расположение узла ${node.id}.`);
+    return [node.id,bounds];
+  }));
+  const existingShapeBounds=getShapeBoundsByElementId(xml);
+  const baseBottom=Math.max(...[...existingShapeBounds.values()].map(bounds=>bounds.y+bounds.height));
+  const stacked=stackGraphBelow(
+    baseModel.graph,
+    nextGraph,
+    baseModel.bounds,
+    nextBounds,
+    Number.isFinite(baseBottom)?baseBottom:Math.max(...[...baseModel.bounds.values()].map(bounds=>bounds.y+bounds.height)),
+  );
+  return {
+    graph:stacked.graph,
+    xml:mergeRefinementXml(xml,baseModel,stacked.graph,stacked.layoutOverrides),
+  };
 }
 
 export function mergeGraphs(base: BpmnGraph, next: BpmnGraph): BpmnGraph {

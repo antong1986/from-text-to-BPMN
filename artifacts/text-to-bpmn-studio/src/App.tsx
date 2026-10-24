@@ -4,9 +4,9 @@ import { useGenerateBpmn, useRefineBpmn, useUploadDocument, type BpmnGraph } fro
 import BPMNViewer from './components/BPMNViewer';
 import SpecExportButton from './components/SpecExportButton';
 import {
+  appendGraphBelowXml,
   extractBpmnXmlModel,
   generateBpmnXmlFromJson,
-  mergeGraphs,
   mergeRefinementGraphs,
   mergeRefinementXml,
 } from './utils/bpmnBuilder';
@@ -106,10 +106,11 @@ export default function App(){
 
   const applyGeneratedResult=(response:unknown,description:string)=>{
     const generatedGraph=parseGeneratedGraph(response);
-    const combined=hasGenerated?mergeGraphs(graph,generatedGraph):generatedGraph;
-    const xml=generateBpmnXmlFromJson(combined);
+    const appended=hasGenerated?appendGraphBelowXml(currentXmlRef.current,generatedGraph):null;
+    const combined=appended?.graph??generatedGraph;
+    const xml=appended?.xml??generateBpmnXmlFromJson(generatedGraph);
     setUserInput(description);setGraph(combined);replaceDiagramXml(xml);setHasGenerated(true);
-    const task=combined.nodes.find(n=>n.type==='userTask'||n.type==='serviceTask')?.name||'этого этапа';
+    const task=generatedGraph.nodes.find(n=>n.type==='userTask'||n.type==='serviceTask')?.name||'этого этапа';
     const question=QUESTIONS[Math.floor(Math.random()*QUESTIONS.length)].replace('{{task}}',task);
     setChatMessages([{sender:'ai',text:question}]);setChatInput('');setIsValidated(false);
     setIsScenarioFinished(false);setSqlSchema(null);

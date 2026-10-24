@@ -4,6 +4,7 @@ import {
   generateBpmnXmlFromJson,
   mergeGraphs,
   mergeRefinementGraphs,
+  stackGraphBelow,
 } from '../src/utils/bpmnBuilder.ts';
 
 const sample = {
@@ -104,4 +105,41 @@ test('refinement XML generation keeps existing node bounds and avoids overlappin
   assert.match(xml,/<dc:Bounds x="100" y="100" width="36" height="36" \/>/);
   assert.match(xml,/<dc:Bounds x="300" y="100" width="36" height="36" \/>/);
   assert.match(xml,/<dc:Bounds x="290" y="[^1]/);
+});
+
+test('a new description forms a separate process below the existing graph', () => {
+  const nextGraph = {
+    nodes: [
+      { id:'new_start',type:'start',name:'New start' },
+      { id:'new_task',type:'userTask',name:'New task' },
+      { id:'new_end',type:'end',name:'New end' },
+    ],
+    edges: [
+      { from:'new_start',to:'new_task' },
+      { from:'new_task',to:'new_end' },
+    ],
+  };
+  const nextBounds = new Map([
+    ['new_start',{x:100,y:100,width:36,height:36}],
+    ['new_task',{x:290,y:79,width:110,height:78}],
+    ['new_end',{x:480,y:100,width:36,height:36}],
+  ]);
+
+  const stacked = stackGraphBelow(sample,nextGraph,new Map([
+    ['start',{x:100,y:150,width:36,height:36}],
+    ['task',{x:290,y:129,width:110,height:78}],
+    ['decision',{x:480,y:143,width:50,height:50}],
+    ['save',{x:670,y:129,width:110,height:78}],
+    ['end',{x:860,y:150,width:36,height:36}],
+  ]),nextBounds,260);
+
+  assert.equal(stacked.graph.nodes.length,sample.nodes.length+nextGraph.nodes.length);
+  assert.deepEqual(stacked.graph.edges.slice(0,sample.edges.length),sample.edges);
+  assert.ok(stacked.graph.nodes.some(node=>node.id==='description_1_new_task'));
+  assert.ok(stacked.graph.edges.some(edge=>edge.from==='description_1_new_start'&&edge.to==='description_1_new_task'));
+  assert.ok(stacked.graph.edges.every(edge=>!edge.from.startsWith('description_1_')||edge.to.startsWith('description_1_')));
+  assert.ok(stacked.graph.edges.every(edge=>!edge.to.startsWith('description_1_')||edge.from.startsWith('description_1_')));
+  assert.ok(stacked.layoutOverrides.get('description_1_new_start').y>=420);
+  assert.ok(stacked.layoutOverrides.get('description_1_new_task').y>=399);
+  assert.ok(stacked.layoutOverrides.get('start').y===150);
 });
