@@ -1,8 +1,31 @@
 import type { BpmnEdge, BpmnGraph, BpmnNode } from '@workspace/api-client-react';
 import { BRANCH_ROW_HEIGHT, LOOP_CLEARANCE, LOOP_LANE_GAP, routeFlow, type NodeBounds } from './bpmnRouting.ts';
 
+const BPMN_NS = 'http://www.omg.org/spec/BPMN/20100524/MODEL';
+const BPMNDI_NS = 'http://www.omg.org/spec/BPMN/20100524/DI';
+const DC_NS = 'http://www.omg.org/spec/DD/20100524/DC';
+const DI_NS = 'http://www.omg.org/spec/DD/20100524/DI';
 const typeTag: Record<BpmnNode['type'], string> = {
   start: 'startEvent', end: 'endEvent', userTask: 'userTask', serviceTask: 'serviceTask', gateway: 'exclusiveGateway',
+};
+const graphTypeByBpmnElement: Record<string,BpmnNode['type']> = {
+  startEvent:'start',
+  endEvent:'end',
+  task:'userTask',
+  userTask:'userTask',
+  manualTask:'userTask',
+  receiveTask:'userTask',
+  serviceTask:'serviceTask',
+  sendTask:'serviceTask',
+  scriptTask:'serviceTask',
+  businessRuleTask:'serviceTask',
+  exclusiveGateway:'gateway',
+  parallelGateway:'gateway',
+  eventBasedGateway:'gateway',
+  inclusiveGateway:'gateway',
+  complexGateway:'gateway',
+  intermediateThrowEvent:'serviceTask',
+  intermediateCatchEvent:'serviceTask',
 };
 const escape = (value: string) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
@@ -13,7 +36,10 @@ function validate(graph: BpmnGraph): void {
   graph.edges.forEach(e => { if (!ids.has(e.from) || !ids.has(e.to)) throw new Error('Связь ссылается на отсутствующий узел.'); });
 }
 
-export function generateBpmnXmlFromJson(graph: BpmnGraph): string {
+export function generateBpmnXmlFromJson(
+  graph: BpmnGraph,
+  layoutOverrides?: ReadonlyMap<string,NodeBounds>,
+): string {
   validate(graph);
   const nodes = graph.nodes;
   const edgeIds = graph.edges.map((_, i) => `Flow_${i + 1}`);
@@ -40,11 +66,33 @@ export function generateBpmnXmlFromJson(graph: BpmnGraph): string {
   const minTop = Math.min(...nodes.map(n => positions.get(n.id)!.y - height(n) / 2));
   const topPadding = Math.max(0, 20 + LOOP_CLEARANCE + Math.max(0, loopCount - 1) * LOOP_LANE_GAP - minTop);
   if (topPadding) positions.forEach(p => { p.y += topPadding; });
-  const diagramTop = minTop + topPadding;
-  const bounds = new Map<string, NodeBounds>(nodes.map(n => {
+  const generatedBounds = new Map<string, NodeBounds>(nodes.map(n => {
     const p = positions.get(n.id)!;
     return [n.id, {x: p.x, y: p.y - height(n) / 2, width: width(n), height: height(n)}];
   }));
+  const bounds = new Map<string,NodeBounds>();
+  if (layoutOverrides?.size) {
+    const overlaps = (a:NodeBounds,b:NodeBounds) =>
+      a.x < b.x + b.width + 24 && a.x + a.width + 24 > b.x &&
+      a.y < b.y + b.height + 24 && a.y + a.height + 24 > b.y;
+    nodes.forEach(node => {
+      const existing=layoutOverrides.get(node.id);
+      if(existing)bounds.set(node.id,{...existing});
+    });
+    nodes.forEach(node => {
+      if(bounds.has(node.id))return;
+      let candidate={...generatedBounds.get(node.id)!};
+      let attempts=0;
+      while([...bounds.values()].some(placed=>overlaps(candidate,placed))&&attempts<40) {
+        candidate={...candidate,y:candidate.y+BRANCH_ROW_HEIGHT};
+        attempts++;
+      }
+      bounds.set(node.id,candidate);
+    });
+  } else {
+    generatedBounds.forEach((value,key)=>bounds.set(key,value));
+  }
+  const diagramTop = Math.min(...[...bounds.values()].map(node=>node.y));
   const shapeXml = nodes.map((n, i) => {
     const b = bounds.get(n.id)!;
     return `<bpmndi:BPMNShape id="Node_${i + 1}_di" bpmnElement="Node_${i + 1}"${n.type === 'gateway' ? ' isMarkerVisible="true"' : ''}><dc:Bounds x="${b.x}" y="${b.y}" width="${b.width}" height="${b.height}" /></bpmndi:BPMNShape>`;
@@ -73,23 +121,64 @@ export function generateBpmnXmlFromJson(graph: BpmnGraph): string {
 <bpmndi:BPMNDiagram id="BPMNDiagram_1"><bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Process_1">${shapeXml}${edgeXml}</bpmndi:BPMNPlane></bpmndi:BPMNDiagram></bpmn:definitions>`;
 }
 
+export type BpmnXmlModel = {
+  graph:BpmnGraph;
+  nodeXmlIds:Map<string,string>;
+  edgeXmlIds:string[];
+  bounds:Map<string,NodeBounds>;
+};
+
+function parseXmlDocument(xml:string):XMLDocument {
+  const doc=new DOMParser().parseFromString(xml,'application/xml');
+  if(doc.getElementsByTagName('parsererror').length)throw new Error('XML диаграммы повреждён.');
+  return doc;
+}
+
+export function extractBpmnXmlModel(xml:string):BpmnXmlModel {
+  const doc=parseXmlDocument(xml);
+  const process=Array.from(doc.getElementsByTagNameNS(BPMN_NS,'process'))[0];
+  if(!process)throw new Error('В XML не найден процесс BPMN.');
+  const nodes:BpmnNode[]=[];
+  const graphIdByXmlId=new Map<string,string>();
+  const nodeXmlIds=new Map<string,string>();
+  const flowNodes=Array.from(process.getElementsByTagName('*')).filter(element=>
+    element.namespaceURI===BPMN_NS&&graphTypeByBpmnElement[element.localName]&&element.getAttribute('id'),
+  );
+  flowNodes.forEach(element=>{
+    const xmlId=element.getAttribute('id')!;
+    const id=`n${nodes.length+1}`;
+    graphIdByXmlId.set(xmlId,id);
+    nodeXmlIds.set(id,xmlId);
+    nodes.push({
+      id,
+      type:graphTypeByBpmnElement[element.localName],
+      name:element.getAttribute('name')??'',
+    });
+  });
+  const edges:BpmnEdge[]=[];
+  const edgeXmlIds:string[]=[];
+  Array.from(process.getElementsByTagNameNS(BPMN_NS,'sequenceFlow')).forEach(flow=>{
+    const from=graphIdByXmlId.get(flow.getAttribute('sourceRef')??'');
+    const to=graphIdByXmlId.get(flow.getAttribute('targetRef')??'');
+    const id=flow.getAttribute('id');
+    if(!from||!to||!id)return;
+    edges.push({from,to,...(flow.getAttribute('name')?{condition:flow.getAttribute('name')!}:{})});
+    edgeXmlIds.push(id);
+  });
+  const bounds=new Map<string,NodeBounds>();
+  Array.from(doc.getElementsByTagNameNS(BPMNDI_NS,'BPMNShape')).forEach(shape=>{
+    const graphId=graphIdByXmlId.get(shape.getAttribute('bpmnElement')??'');
+    const element=Array.from(shape.getElementsByTagNameNS(DC_NS,'Bounds'))[0];
+    if(!graphId||!element)return;
+    const x=Number(element.getAttribute('x')),y=Number(element.getAttribute('y'));
+    const width=Number(element.getAttribute('width')),height=Number(element.getAttribute('height'));
+    if([x,y,width,height].every(Number.isFinite))bounds.set(graphId,{x,y,width,height});
+  });
+  return {graph:{nodes,edges},nodeXmlIds,edgeXmlIds,bounds};
+}
+
 export function extractGraphFromXml(xml: string): BpmnGraph {
-  const doc = new DOMParser().parseFromString(xml, 'application/xml');
-  if (doc.getElementsByTagName('parsererror').length) throw new Error('XML диаграммы повреждён.');
-  const nodes: BpmnNode[] = [], idMap = new Map<string,string>();
-  const mapType: Record<string,BpmnNode['type']> = { startEvent:'start',endEvent:'end',userTask:'userTask',serviceTask:'serviceTask',task:'userTask',exclusiveGateway:'gateway',intermediateThrowEvent:'serviceTask' };
-  Array.from(doc.getElementsByTagName('*')).forEach(el => {
-    const type = mapType[el.localName], xmlId = el.getAttribute('id');
-    if (!type || !xmlId) return;
-    const id = `n${nodes.length + 1}`; idMap.set(xmlId,id); nodes.push({ id,type,name:el.getAttribute('name') ?? '' });
-  });
-  const edges: BpmnEdge[] = [];
-  Array.from(doc.getElementsByTagName('*')).forEach(el => {
-    if (el.localName !== 'sequenceFlow') return;
-    const from=idMap.get(el.getAttribute('sourceRef') ?? ''),to=idMap.get(el.getAttribute('targetRef') ?? '');
-    if (from && to) edges.push({ from,to,...(el.getAttribute('name') ? {condition:el.getAttribute('name')!} : {}) });
-  });
-  return {nodes,edges};
+  return extractBpmnXmlModel(xml).graph;
 }
 
 export function mergeGraphs(base: BpmnGraph, next: BpmnGraph): BpmnGraph {
