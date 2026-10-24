@@ -145,6 +145,7 @@ button:disabled { cursor: not-allowed; }
 .bpmn-stage { position:absolute; inset:0; width:100%; height:100%; }
 .bpmn-host { position:absolute; inset:0; width:100%; height:100%; }
 .bpmn-host .bjs-container,.bpmn-host .djs-container { width:100%; height:100%!important; }
+.bpmn-host .djs-container svg:focus { outline:none; }
 .bpmn-host .djs-palette,
 .bpmn-host .djs-palette.two-column.open { width:56px; }
 .bpmn-host .djs-palette .entry,
