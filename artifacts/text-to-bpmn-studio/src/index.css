@@ -158,6 +158,74 @@ button:disabled { cursor: not-allowed; }
   font-size:30px;
 }
 .bpmn-host .djs-palette .entry { display:block; float:none; }
+.task-chooser {
+  position:absolute;
+  z-index:12;
+  display:flex;
+  flex-direction:column;
+  width:min(320px,calc(100% - 88px));
+  max-height:calc(100% - 16px);
+  overflow:auto;
+  padding:8px;
+  border:1px solid #d9e1de;
+  border-radius:12px;
+  background:#fff;
+  box-shadow:0 16px 38px #1f353026;
+  animation:task-chooser-in .16s ease-out;
+}
+.task-chooser-head {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:4px 6px 7px 9px;
+  color:#87918f;
+  font-size:10px;
+  font-weight:700;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+}
+.task-chooser-close {
+  display:grid;
+  width:26px;
+  height:26px;
+  place-items:center;
+  border:0;
+  border-radius:6px;
+  background:transparent;
+  color:#71807b;
+  font-size:18px;
+}
+.task-chooser-close:hover { background:#eef4f1; color:#2b776b; }
+.task-chooser-option {
+  display:grid;
+  grid-template-columns:38px minmax(0,1fr);
+  align-items:start;
+  gap:11px;
+  width:100%;
+  padding:10px 9px;
+  border:0;
+  border-radius:9px;
+  background:transparent;
+  color:#263431;
+  text-align:left;
+  cursor:pointer;
+}
+.task-chooser-option:hover,.task-chooser-option:focus-visible { background:#f0f6f3; outline:none; }
+.task-chooser-icon {
+  display:grid;
+  width:36px;
+  height:36px;
+  place-items:center;
+  border:1px solid #e1e8e4;
+  border-radius:9px;
+  color:#4f6c64;
+  font-size:19px;
+}
+.task-chooser-copy { display:flex; min-width:0; flex-direction:column; gap:3px; padding-top:1px; }
+.task-chooser-copy strong { font-size:12px; font-weight:700; }
+.task-chooser-copy small { color:#687671; font-size:10px; line-height:1.45; }
+.task-chooser-option:focus-visible,.task-chooser-close:focus-visible { outline:2px solid #438b7e; outline-offset:1px; }
+@keyframes task-chooser-in { from { opacity:0; transform:translateX(-5px); } to { opacity:1; transform:translateX(0); } }
 .canvas-clear { position:absolute; left:88px; bottom:16px; z-index:5; display:inline-flex; align-items:center; justify-content:center; text-align:center; border:1px solid #d9e0dd; border-radius:9px; padding:8px 11px; background:#ffffffed; color:#64716e; font-size:10px; box-shadow:0 3px 12px #1b3b3210; }
 .canvas-clear:hover:not(:disabled) { color:#a34e40; border-color:#e4c6bd; }
 .canvas-clear:disabled { opacity:.5; }
