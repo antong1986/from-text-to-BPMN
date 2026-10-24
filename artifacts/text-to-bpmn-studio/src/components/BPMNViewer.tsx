@@ -134,7 +134,7 @@ export default function BPMNViewer({xml}:{xml:string}) {
         <span className="task-chooser-icon bpmn-icon-task" aria-hidden="true" />
         <span className="task-chooser-copy">
           <strong>Task</strong>
-          <small>Обычная задача процесса</small>
+          <small>A general process task</small>
         </span>
       </button>
       <button
@@ -146,7 +146,7 @@ export default function BPMNViewer({xml}:{xml:string}) {
         <span className="task-chooser-icon bpmn-icon-user-task" aria-hidden="true" />
         <span className="task-chooser-copy">
           <strong>User task</strong>
-          <small>Работа, которую выполняет человек</small>
+          <small>Work performed by a person</small>
         </span>
       </button>
       <button
@@ -158,7 +158,7 @@ export default function BPMNViewer({xml}:{xml:string}) {
         <span className="task-chooser-icon bpmn-icon-service" aria-hidden="true" />
         <span className="task-chooser-copy">
           <strong>Service task</strong>
-          <small>Автоматическая работа сервиса или системы</small>
+          <small>Automated work performed by a service or system</small>
         </span>
       </button>
     </div>}
