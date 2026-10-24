@@ -55,6 +55,22 @@ class TaskChooserPaletteProvider {
             },
           },
         },
+        'create.exclusive-gateway': {
+          group: 'gateway',
+          className: 'bpmn-icon-gateway-none',
+          title: 'Create gateway',
+          action: {
+            dragstart: (event) => {
+              create.start(
+                event,
+                elementFactory.createShape({ type: 'bpmn:ExclusiveGateway' }),
+              );
+            },
+            click: (event) => {
+              eventBus.fire('gatewayChooser.toggle', { sourceEvent: event });
+            },
+          },
+        },
       }),
     });
   }

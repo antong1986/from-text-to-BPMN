@@ -5,23 +5,24 @@ import { downloadFile } from '../utils/downloadFile';
 import { taskChooserPaletteModule } from './taskChooserPalette';
 
 type CanvasApi = { zoom: (value:string|number)=>void };
-type TaskType = 'bpmn:Task'|'bpmn:UserTask'|'bpmn:ServiceTask';
-type TaskChooserPosition = {left:number;top:number};
-type TaskChooserEvent = {sourceEvent:Event};
+type ShapeType = 'bpmn:Task'|'bpmn:UserTask'|'bpmn:ServiceTask'|'bpmn:ExclusiveGateway'|'bpmn:ParallelGateway'|'bpmn:EventBasedGateway';
+type ChooserKind = 'task'|'gateway';
+type ChooserPosition = {left:number;top:number};
+type ChooserEvent = {sourceEvent:Event};
 type EventBusApi = {
-  on: (eventName:string, callback:(event:TaskChooserEvent)=>void)=>void;
-  off: (eventName:string, callback:(event:TaskChooserEvent)=>void)=>void;
+  on: (eventName:string, callback:(event:ChooserEvent)=>void)=>void;
+  off: (eventName:string, callback:(event:ChooserEvent)=>void)=>void;
 };
 type CreateApi = {start:(event:Event,element:unknown)=>void};
-type ElementFactoryApi = {createShape:(attributes:{type:TaskType})=>unknown};
+type ElementFactoryApi = {createShape:(attributes:{type:ShapeType})=>unknown};
 
 export default function BPMNViewer({xml}:{xml:string}) {
   const host = useRef<HTMLDivElement>(null);
-  const taskChooser = useRef<HTMLDivElement>(null);
-  const taskTrigger = useRef<HTMLElement|null>(null);
+  const chooser = useRef<HTMLDivElement>(null);
+  const chooserTrigger = useRef<HTMLElement|null>(null);
   const modeler = useRef<BpmnModeler|null>(null);
-  const [taskChooserOpen,setTaskChooserOpen] = useState(false);
-  const [taskChooserPosition,setTaskChooserPosition] = useState<TaskChooserPosition>({left:68,top:8});
+  const [chooserKind,setChooserKind] = useState<ChooserKind|null>(null);
+  const [chooserPosition,setChooserPosition] = useState<ChooserPosition>({left:68,top:8});
   const [renderError,setRenderError] = useState('');
   const [exportError,setExportError] = useState('');
   useEffect(()=>{
@@ -32,46 +33,51 @@ export default function BPMNViewer({xml}:{xml:string}) {
     });
     modeler.current=instance;
     const eventBus=instance.get('eventBus') as EventBusApi;
-    const toggleTaskChooser=({sourceEvent}:TaskChooserEvent)=>{
+    const toggleChooser=(kind:ChooserKind)=>( {sourceEvent}:ChooserEvent )=>{
       const stage=host.current;
       if(!stage)return;
+      const action=kind==='task'?'create.task':'create.exclusive-gateway';
       const target=sourceEvent.target;
       const entry=target instanceof Element
-        ? target.closest<HTMLElement>('.djs-palette [data-action="create.task"]')
+        ? target.closest<HTMLElement>(`.djs-palette [data-action="${action}"]`)
         : null;
-      const trigger=entry??stage.querySelector<HTMLElement>('.djs-palette [data-action="create.task"]');
+      const trigger=entry??stage.querySelector<HTMLElement>(`.djs-palette [data-action="${action}"]`);
       if(!trigger)return;
       const stageRect=stage.getBoundingClientRect();
       const triggerRect=trigger.getBoundingClientRect();
       const left=triggerRect.right-stageRect.left+12;
-      const panelHeight=280;
+      const panelHeight=300;
       const top=Math.min(
         Math.max(8,triggerRect.top-stageRect.top),
         Math.max(8,stageRect.height-panelHeight-8),
       );
-      taskTrigger.current=trigger;
-      setTaskChooserPosition({left,top});
-      setTaskChooserOpen(open=>!open);
+      chooserTrigger.current=trigger;
+      setChooserPosition({left,top});
+      setChooserKind(current=>current===kind?null:kind);
     };
+    const toggleTaskChooser=toggleChooser('task');
+    const toggleGatewayChooser=toggleChooser('gateway');
     eventBus.on('taskChooser.toggle',toggleTaskChooser);
+    eventBus.on('gatewayChooser.toggle',toggleGatewayChooser);
     return ()=>{
       eventBus.off('taskChooser.toggle',toggleTaskChooser);
+      eventBus.off('gatewayChooser.toggle',toggleGatewayChooser);
       instance.destroy();
       modeler.current=null;
     };
   },[]);
   useEffect(()=>{
-    if(!taskChooserOpen)return;
+    if(!chooserKind)return;
     const closeOnOutsidePointer=(event:PointerEvent)=>{
       const target=event.target;
       if(!(target instanceof Node))return;
-      if(taskChooser.current?.contains(target)||taskTrigger.current?.contains(target))return;
-      setTaskChooserOpen(false);
+      if(chooser.current?.contains(target)||chooserTrigger.current?.contains(target))return;
+      setChooserKind(null);
     };
     const closeOnEscape=(event:KeyboardEvent)=>{
       if(event.key!=='Escape')return;
-      setTaskChooserOpen(false);
-      taskTrigger.current?.focus();
+      setChooserKind(null);
+      chooserTrigger.current?.focus();
     };
     document.addEventListener('pointerdown',closeOnOutsidePointer);
     document.addEventListener('keydown',closeOnEscape);
@@ -79,7 +85,7 @@ export default function BPMNViewer({xml}:{xml:string}) {
       document.removeEventListener('pointerdown',closeOnOutsidePointer);
       document.removeEventListener('keydown',closeOnEscape);
     };
-  },[taskChooserOpen]);
+  },[chooserKind]);
   useEffect(()=>{
     let disposed=false;
     const render=async()=>{
@@ -89,14 +95,14 @@ export default function BPMNViewer({xml}:{xml:string}) {
     };
     void render(); return ()=>{disposed=true;};
   },[xml]);
-  const createTask=(type:TaskType,event:ReactMouseEvent<HTMLButtonElement>)=>{
+  const createShape=(type:ShapeType,event:ReactMouseEvent<HTMLButtonElement>)=>{
     event.stopPropagation();
     const instance=modeler.current;
     if(!instance)return;
     const create=instance.get('create') as CreateApi;
     const elementFactory=instance.get('elementFactory') as ElementFactoryApi;
     create.start(event.nativeEvent,elementFactory.createShape({type}));
-    setTaskChooserOpen(false);
+    setChooserKind(null);
   };
   const exportAs=async(kind:'xml'|'svg')=>{
     if(!modeler.current)return;setExportError('');
@@ -107,60 +113,99 @@ export default function BPMNViewer({xml}:{xml:string}) {
   };
   return <div className="bpmn-stage" data-testid="bpmn-stage">
     <div ref={host} className="bpmn-host" />
-    {taskChooserOpen&&<div
-      ref={taskChooser}
-      className="task-chooser"
+    {chooserKind&&<div
+      ref={chooser}
+      className="palette-chooser"
       role="dialog"
-      aria-label="Выбор типа задачи"
-      data-testid="task-chooser"
-      style={{left:taskChooserPosition.left,top:taskChooserPosition.top}}
+      aria-label={chooserKind==='task'?'Task types':'Gateway types'}
+      data-testid={`${chooserKind}-chooser`}
+      style={{left:chooserPosition.left,top:chooserPosition.top}}
     >
-      <div className="task-chooser-head">
-        <span>Tasks</span>
+      <div className="palette-chooser-head">
+        <span>{chooserKind==='task'?'Tasks':'Gateways'}</span>
         <button
           type="button"
-          className="task-chooser-close"
-          aria-label="Закрыть выбор типа задачи"
-          data-testid="button-close-task-chooser"
-          onClick={()=>setTaskChooserOpen(false)}
+          className="palette-chooser-close"
+          aria-label={`Close ${chooserKind} chooser`}
+          data-testid="button-close-chooser"
+          onClick={()=>setChooserKind(null)}
         >×</button>
       </div>
-      <button
-        type="button"
-        className="task-chooser-option"
-        data-testid="button-create-task"
-        onClick={event=>createTask('bpmn:Task',event)}
-      >
-        <span className="task-chooser-icon bpmn-icon-task" aria-hidden="true" />
-        <span className="task-chooser-copy">
-          <strong>Task</strong>
-          <small>A general process task</small>
-        </span>
-      </button>
-      <button
-        type="button"
-        className="task-chooser-option"
-        data-testid="button-create-user-task"
-        onClick={event=>createTask('bpmn:UserTask',event)}
-      >
-        <span className="task-chooser-icon bpmn-icon-user-task" aria-hidden="true" />
-        <span className="task-chooser-copy">
-          <strong>User task</strong>
-          <small>Work performed by a person</small>
-        </span>
-      </button>
-      <button
-        type="button"
-        className="task-chooser-option"
-        data-testid="button-create-service-task"
-        onClick={event=>createTask('bpmn:ServiceTask',event)}
-      >
-        <span className="task-chooser-icon bpmn-icon-service" aria-hidden="true" />
-        <span className="task-chooser-copy">
-          <strong>Service task</strong>
-          <small>Automated work performed by a service or system</small>
-        </span>
-      </button>
+      {chooserKind==='task'?<>
+        <button
+          type="button"
+          className="palette-chooser-option"
+          data-testid="button-create-task"
+          onClick={event=>createShape('bpmn:Task',event)}
+        >
+          <span className="palette-chooser-icon bpmn-icon-task" aria-hidden="true" />
+          <span className="palette-chooser-copy">
+            <strong>Task</strong>
+            <small>A general process task</small>
+          </span>
+        </button>
+        <button
+          type="button"
+          className="palette-chooser-option"
+          data-testid="button-create-user-task"
+          onClick={event=>createShape('bpmn:UserTask',event)}
+        >
+          <span className="palette-chooser-icon bpmn-icon-user-task" aria-hidden="true" />
+          <span className="palette-chooser-copy">
+            <strong>User task</strong>
+            <small>Work performed by a person</small>
+          </span>
+        </button>
+        <button
+          type="button"
+          className="palette-chooser-option"
+          data-testid="button-create-service-task"
+          onClick={event=>createShape('bpmn:ServiceTask',event)}
+        >
+          <span className="palette-chooser-icon bpmn-icon-service" aria-hidden="true" />
+          <span className="palette-chooser-copy">
+            <strong>Service task</strong>
+            <small>Automated work performed by a service or system</small>
+          </span>
+        </button>
+      </>:<>
+        <button
+          type="button"
+          className="palette-chooser-option"
+          data-testid="button-create-exclusive-gateway"
+          onClick={event=>createShape('bpmn:ExclusiveGateway',event)}
+        >
+          <span className="palette-chooser-icon bpmn-icon-gateway-xor" aria-hidden="true" />
+          <span className="palette-chooser-copy">
+            <strong>Exclusive gateway</strong>
+            <small>Routes the token down one path, based on data</small>
+          </span>
+        </button>
+        <button
+          type="button"
+          className="palette-chooser-option"
+          data-testid="button-create-parallel-gateway"
+          onClick={event=>createShape('bpmn:ParallelGateway',event)}
+        >
+          <span className="palette-chooser-icon bpmn-icon-gateway-parallel" aria-hidden="true" />
+          <span className="palette-chooser-copy">
+            <strong>Parallel gateway</strong>
+            <small>Splits the flow into parallel paths, or joins them</small>
+          </span>
+        </button>
+        <button
+          type="button"
+          className="palette-chooser-option"
+          data-testid="button-create-event-based-gateway"
+          onClick={event=>createShape('bpmn:EventBasedGateway',event)}
+        >
+          <span className="palette-chooser-icon bpmn-icon-gateway-eventbased" aria-hidden="true" />
+          <span className="palette-chooser-copy">
+            <strong>Event-based gateway</strong>
+            <small>Follows the path of whichever event occurs first</small>
+          </span>
+        </button>
+      </>}
     </div>}
     {renderError&&<div className="render-alert" role="status" data-testid="status-render-error">{renderError}</div>}
     <div className="export-float">
