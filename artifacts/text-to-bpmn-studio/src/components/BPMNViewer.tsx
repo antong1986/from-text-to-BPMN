@@ -116,7 +116,7 @@ export default function BPMNViewer({xml}:{xml:string}) {
       style={{left:taskChooserPosition.left,top:taskChooserPosition.top}}
     >
       <div className="task-chooser-head">
-        <span>Тип задачи</span>
+        <span>Tasks</span>
         <button
           type="button"
           className="task-chooser-close"
