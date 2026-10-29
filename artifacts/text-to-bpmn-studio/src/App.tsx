@@ -370,7 +370,7 @@ export default function App(){
         <div className="toolbar">
           <button type="button" className="secondary-btn" disabled={!isValidated} onClick={()=>setSqlSchema(generateSqlSchema(currentXml))} title={!isValidated&&hasGenerated?'Ответьте на вопрос ИИ-валидатора, чтобы подтвердить логику процесса или завершите сценарий вручную':undefined} data-testid="button-generate-sql">Схема БД</button>
           <SpecExportButton xml={currentXml} disabled={!isValidated} hasDiagram={hasGenerated}/>
-          <div className="auth-bar" data-testid="auth-status">
+          <div className={`auth-bar${signedInUser?' is-authenticated':''}`} data-testid="auth-status">
             {signedInUser?<>
               <div className="auth-summary">
                 <span className="auth-email" title={signedInUser.email}>{signedInUser.email}</span>
