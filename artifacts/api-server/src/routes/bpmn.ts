@@ -4,7 +4,7 @@ import { isCompleteBpmnXml, stripXmlMarkdownFences } from "../lib/bpmn-xml";
 
 const router: IRouter = Router();
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
-const OPENROUTER_MODEL = "google/gemini-2.5-flash:free";
+const OPENROUTER_MODEL = "google/gemma-4-31b-it:free";
 const MAX_PROMPT_LENGTH = 60_000;
 
 const BPMN_XML_SYSTEM_PROMPT = `Ты — эксперт по BPMN 2.0 и компилятор описаний процессов в BPMN XML для bpmn-js.
