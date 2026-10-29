@@ -87,6 +87,7 @@ button:disabled { cursor: not-allowed; }
 .brand-caption { margin-top:5px; color:#758084; font-size:11px; }
 .auth-bar { box-sizing:border-box; display:flex; align-items:center; gap:8px; width:240px; height:37px; min-width:0; flex:0 1 240px; padding:3px 3px 3px 8px; border:1px solid #e2e9e5; border-radius:10px; background:#fff; }
 .auth-bar.is-authenticated { background:#dcece6; }
+.auth-bar:not(.is-authenticated) { width:280px; flex-basis:280px; }
 .auth-summary { display:grid; flex:1; min-width:0; gap:0; }
 .auth-email { overflow:hidden; color:#354541; font-size:10px; font-weight:700; text-overflow:ellipsis; white-space:nowrap; }
 .auth-quota,.auth-prompt { min-width:0; overflow:hidden; color:#78847f; font-size:10px; text-overflow:ellipsis; white-space:nowrap; }

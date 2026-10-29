@@ -378,7 +378,7 @@ export default function App(){
               </div>
               <button type="button" className="auth-action" onClick={()=>void handleLogout()}>Выйти</button>
             </>:<>
-              <span className="auth-prompt" title="Войдите, чтобы генерировать диаграммы">{authStatus===null?'Проверка входа…':'Войдите, чтобы генерировать диаграммы'}</span>
+              <span className="auth-prompt" title="Войдите для генерации">{authStatus===null?'Проверка входа…':'Войдите для генерации'}</span>
               <a className="auth-action" href="/api/auth/google?next=%2F" onClick={()=>saveDescriptionDraft(userInput)}>Войти через Google</a>
             </>}
           </div>
