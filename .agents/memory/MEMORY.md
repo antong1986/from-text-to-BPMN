@@ -1,1 +1,2 @@
 - [Verify installed dependencies](dependency-audit-verification.md) — after workspace overrides, confirm resolved installs as well as the lockfile audit.
+- [OpenRouter free-model routing](openrouter-free-routing.md) — use the dynamic free router for resilience to single-model 429s; it cannot bypass account-wide quota limits.

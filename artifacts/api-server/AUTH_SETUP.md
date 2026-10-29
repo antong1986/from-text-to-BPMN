@@ -15,7 +15,7 @@ Optional configuration:
   whitelist access.
 - `GOOGLE_CALLBACK_URL` — overrides the callback URI derived from the Replit
   domain. Register the exact value in the Google OAuth client.
-- `OPENROUTER_MODEL` — defaults to `google/gemma-4-31b-it:free`.
+- `OPENROUTER_MODEL` — defaults to `openrouter/free`, which routes to an available free model.
 - `FRONTEND_URL` and `CORS_ORIGIN` — frontend origin(s), comma-separated for
   `CORS_ORIGIN`, when the frontend is hosted separately.
 - `SESSION_COOKIE_SAME_SITE=none` — use only for a cross-site frontend/API
