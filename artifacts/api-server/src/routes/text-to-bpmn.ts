@@ -1,7 +1,7 @@
 import { Router, type IRouter, type Request } from "express";
 import { extname } from "node:path";
 import multer from "multer";
-import { fetchGeminiWithRetry } from "../lib/gemini-request";
+import { fetchWithRetry } from "../lib/fetch-with-retry";
 import { BPMN_RESPONSE_FORMAT } from "../lib/bpmn-response-format";
 import { getRefinementIssue } from "../lib/bpmn-refinement";
 import { parseBpmnGraph, parseBpmnRefinement } from "../lib/parse-bpmn-graph";
@@ -64,7 +64,7 @@ async function callModel(
   let response: Response;
 
   try {
-    response = await fetchGeminiWithRetry(`${getAiBaseUrl()}/chat/completions`, {
+    response = await fetchWithRetry(`${getAiBaseUrl()}/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

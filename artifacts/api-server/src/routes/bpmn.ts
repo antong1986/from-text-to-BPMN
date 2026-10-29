@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { checkBPMNLimits, consumeBPMNGeneration, sendPaymentRequired } from "../middlewares/bpmn-limits";
 import { isCompleteBpmnXml, stripXmlMarkdownFences } from "../lib/bpmn-xml";
+import { fetchWithRetry } from "../lib/fetch-with-retry";
 
 const router: IRouter = Router();
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
@@ -41,8 +42,9 @@ router.post("/bpmn/generate", checkBPMNLimits, async (req, res): Promise<void> =
   }
 
   let response: Response;
+  const model = process.env.OPENROUTER_MODEL || OPENROUTER_MODEL;
   try {
-    response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
+    response = await fetchWithRetry(`${OPENROUTER_BASE_URL}/chat/completions`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -51,7 +53,7 @@ router.post("/bpmn/generate", checkBPMNLimits, async (req, res): Promise<void> =
         "X-Title": "Text-to-BPMN Studio",
       },
       body: JSON.stringify({
-        model: process.env.OPENROUTER_MODEL || OPENROUTER_MODEL,
+        model,
         temperature: 0.1,
         max_tokens: 12000,
         messages: [
@@ -59,22 +61,35 @@ router.post("/bpmn/generate", checkBPMNLimits, async (req, res): Promise<void> =
           { role: "user", content: textPrompt },
         ],
       }),
-      signal: AbortSignal.timeout(90_000),
+    }, {
+      totalTimeoutMs: 180_000,
+      attemptTimeoutMs: 120_000,
+      initialRetryDelayMs: 5_000,
+      maxRetryDelayMs: 30_000,
+      onRetry: (attempt, status) => req.log.warn(
+        { model, attempt, status },
+        "Retrying a transient OpenRouter failure",
+      ),
     });
   } catch (error) {
     req.log.warn(
-      { error: error instanceof Error ? error.message : "network request failed" },
-      "OpenRouter request could not be completed",
+      {
+        model,
+        error: error instanceof Error ? error.message : "network request failed",
+      },
+      "OpenRouter request failed after retry attempts",
     );
-    res.status(503).json({ error: "OpenRouter временно недоступен. Повторите запрос позже." });
+    res.status(503).json({
+      error: "OpenRouter не ответил после повторных попыток. Проверьте доступность модели и повторите запрос позже.",
+    });
     return;
   }
 
   if (!response.ok) {
-    req.log.warn({ status: response.status }, "OpenRouter returned an error");
+    req.log.warn({ model, status: response.status }, "OpenRouter returned an error after retry attempts");
     res.status(response.status === 429 ? 503 : 502).json({
       error: response.status === 429
-        ? "Достигнут лимит запросов OpenRouter. Повторите запрос позже."
+        ? "OpenRouter продолжает ограничивать запросы после повторных попыток. Проверьте квоту модели и повторите запрос позже."
         : "OpenRouter не смог построить диаграмму. Проверьте настройки модели и API-ключ.",
     });
     return;
