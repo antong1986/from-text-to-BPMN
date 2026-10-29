@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Check, Network, Paperclip, Send, Undo2 } from 'lucide-react';
-import { useGenerateBpmn, useRefineBpmn, useUploadDocument, type BpmnGraph } from '@workspace/api-client-react';
+import { useRefineBpmn, useUploadDocument, type BpmnGraph } from '@workspace/api-client-react';
 import BPMNViewer from './components/BPMNViewer';
 import SpecExportButton from './components/SpecExportButton';
 import {
@@ -22,6 +22,15 @@ type DiagramSnapshot={
   isValidated:boolean;
   isScenarioFinished:boolean;
   sqlSchema:string|null;
+};
+type AuthStatus={
+  authenticated:boolean;
+  user?:{
+    email:string;
+    hasActivePremium:boolean;
+    freeGenerationsLeft:number;
+    isWhitelisted:boolean;
+  };
 };
 const GENERATION_ERROR_MESSAGE = 'Не удалось построить диаграмму: модель перегружена. Попробуйте повторить запрос позже.';
 const QUESTIONS=[
@@ -48,6 +57,16 @@ function documentErrorMessage(error: unknown): string {
   return 'Не удалось импортировать документ. Проверьте формат файла и попробуйте ещё раз.';
 }
 
+function apiErrorMessage(error: unknown, fallback: string): string {
+  if (error && typeof error === 'object' && 'data' in error) {
+    const data = (error as {data?:unknown}).data;
+    if (data && typeof data === 'object' && 'error' in data &&
+      typeof data.error === 'string' && data.error.trim()) return data.error;
+  }
+  if (error instanceof Error && error.message.trim()) return error.message;
+  return fallback;
+}
+
 export default function App(){
   const [userInput,setUserInput]=useState('');
   const [currentXml,setCurrentXml]=useState(MINIMAL_BPMN_XML);
@@ -63,6 +82,8 @@ export default function App(){
   const [isScenarioFinished,setIsScenarioFinished]=useState(false);
   const [isReplyPending,setIsReplyPending]=useState(false);
   const [isDocumentUploading,setIsDocumentUploading]=useState(false);
+  const [isGenerating,setIsGenerating]=useState(false);
+  const [authStatus,setAuthStatus]=useState<AuthStatus|null>(null);
   const [rollbackSnapshot,setRollbackSnapshot]=useState<DiagramSnapshot|null>(null);
   const [asideWidth,setAsideWidth]=useState(410);
   const [isResizing,setIsResizing]=useState(false);
@@ -72,10 +93,9 @@ export default function App(){
   const flushDiagramXml=useRef<(()=>Promise<string>)|null>(null);
   const documentInput=useRef<HTMLInputElement>(null);
   const messageEnd=useRef<HTMLDivElement>(null);
-  const generate=useGenerateBpmn();
   const refine=useRefineBpmn();
   const uploadDocument=useUploadDocument();
-  const busy=generate.isPending;
+  const busy=isGenerating;
   const hasAiMessage=chatMessages.some(m=>m.sender==='ai');
   const hasTextToClear=Boolean(userInput||chatInput||chatMessages.length||aiError);
   const replaceDiagramXml=(xml:string)=>{
@@ -93,7 +113,22 @@ export default function App(){
     flushDiagramXml.current=flush;
   };
 
+  const refreshAuth=useCallback(async()=>{
+    try{
+      const response=await fetch('/api/auth/me',{credentials:'same-origin'});
+      const status=await response.json() as AuthStatus;
+      setAuthStatus(response.ok?status:{authenticated:false});
+    }catch{
+      setAuthStatus({authenticated:false});
+    }
+  },[]);
+  const handleLogout=async()=>{
+    try{await fetch('/api/auth/logout',{method:'POST',credentials:'same-origin'});}
+    finally{await refreshAuth();}
+  };
+
   useEffect(()=>{messageEnd.current?.scrollIntoView({behavior:'smooth'});},[chatMessages]);
+  useEffect(()=>{void refreshAuth();},[refreshAuth]);
   useEffect(()=>()=>{replyRequestId.current+=1;uploadRequestId.current+=1;},[]);
   useEffect(()=>{
     if(!isResizing)return;
@@ -104,11 +139,11 @@ export default function App(){
     return()=>{document.removeEventListener('mousemove',move);document.removeEventListener('mouseup',up);};
   },[isResizing]);
 
-  const applyGeneratedResult=(response:unknown,description:string)=>{
+  const applyGeneratedResult=(response:unknown,description:string,generatedXml?:string)=>{
     const generatedGraph=parseGeneratedGraph(response);
     const appended=hasGenerated?appendGraphBelowXml(currentXmlRef.current,generatedGraph):null;
     const combined=appended?.graph??generatedGraph;
-    const xml=appended?.xml??generateBpmnXmlFromJson(generatedGraph);
+    const xml=appended?.xml??generatedXml??generateBpmnXmlFromJson(generatedGraph);
     setUserInput(description);setGraph(combined);replaceDiagramXml(xml);setHasGenerated(true);
     const task=generatedGraph.nodes.find(n=>n.type==='userTask'||n.type==='serviceTask')?.name||'этого этапа';
     const question=QUESTIONS[Math.floor(Math.random()*QUESTIONS.length)].replace('{{task}}',task);
@@ -121,12 +156,26 @@ export default function App(){
     uploadRequestId.current+=1;
     replyRequestId.current+=1;
     setIsReplyPending(false);
-    setAiError('');setChatMessages([]);setRollbackSnapshot(null);
+    setIsGenerating(true);setAiError('');setChatMessages([]);setRollbackSnapshot(null);
     try{
-      const result=await generate.mutateAsync({data:{description}});
-      applyGeneratedResult(result,description);
-    }catch{
-      setAiError(GENERATION_ERROR_MESSAGE);
+      const response=await fetch('/api/bpmn/generate',{
+        method:'POST',
+        credentials:'same-origin',
+        headers:{'Content-Type':'application/json','Accept':'application/xml, application/json'},
+        body:JSON.stringify({textPrompt:description}),
+      });
+      if(!response.ok){
+        const payload=await response.json().catch(()=>null) as {error?:string}|null;
+        throw new Error(payload?.error||`Ошибка генерации: HTTP ${response.status}.`);
+      }
+      const generatedXml=await response.text();
+      const generatedGraph=extractBpmnXmlModel(generatedXml).graph;
+      applyGeneratedResult({graph:generatedGraph},description,generatedXml);
+      await refreshAuth();
+    }catch(error){
+      setAiError(apiErrorMessage(error,GENERATION_ERROR_MESSAGE));
+    }finally{
+      setIsGenerating(false);
     }
   };
 
@@ -140,6 +189,7 @@ export default function App(){
       if(requestId!==uploadRequestId.current)return;
       setChatMessages([]);setRollbackSnapshot(null);
       applyGeneratedResult(result,result.description);
+      await refreshAuth();
     }catch(error){
       if(requestId!==uploadRequestId.current)return;
       setAiError(documentErrorMessage(error));
@@ -178,6 +228,7 @@ export default function App(){
       setGraph(mergedGraph);replaceDiagramXml(updatedXml);
       setChatMessages(v=>[...v,{sender:'ai',text:result.message,canRollback:true}]);
       setIsValidated(true);setSqlSchema(null);
+      await refreshAuth();
     }catch(error){
       if(requestId!==replyRequestId.current)return;
       setChatMessages(v=>[...v,{sender:'ai',text:refinementErrorMessage(error),canRollback:true}]);
@@ -222,6 +273,7 @@ export default function App(){
     }
     setIsCopied(true);window.setTimeout(()=>setIsCopied(false),2000);
   };
+  const signedInUser=authStatus?.authenticated?authStatus.user:undefined;
 
   return <div className="studio">
     <aside className="control-rail" style={{width:asideWidth,flexBasis:asideWidth}} data-testid="panel-controls">
@@ -229,6 +281,19 @@ export default function App(){
         <div className="brand-mark" aria-hidden="true">tb</div>
         <div><div className="brand-title">Text-to-BPMN</div><div className="brand-caption">Студия моделирования процессов</div></div>
       </header>
+      <div className="auth-bar" data-testid="auth-status">
+        {signedInUser?<>
+          <div className="auth-summary">
+            <span className="auth-email" title={signedInUser.email}>{signedInUser.email}</span>
+            <span className="auth-quota">{signedInUser.isWhitelisted?'Безлимитный доступ':signedInUser.hasActivePremium?'Активная подписка':`Бесплатно: ${signedInUser.freeGenerationsLeft}`}</span>
+          </div>
+          <button type="button" className="auth-action" onClick={()=>void handleLogout()}>Выйти</button>
+        </>:<>
+          <span className="auth-prompt">{authStatus===null?'Проверка входа…':'Войдите, чтобы генерировать диаграммы'}</span>
+          <a className="auth-action" href="/api/auth/google?next=%2F">Войти через Google</a>
+        </>}
+        <a className="auth-test-link" href="/api/auth/test">Лимиты</a>
+      </div>
       <section>
         <div className="eyebrow" style={{marginBottom:5}}>ШАГ 01 · ОПИСАНИЕ</div>
         <div className="description-head">
@@ -236,7 +301,7 @@ export default function App(){
           <button type="button" className="text-action" onClick={handleClearText} disabled={!hasTextToClear} title={hasTextToClear?'Очистить описание, чат и сообщение об ошибке':'Очищать пока нечего: все текстовые поля уже пусты'} data-testid="button-clear-text">Очистить текст</button>
         </div>
         <div className="description-import-row">
-          <button type="button" className="import-btn" onClick={()=>documentInput.current?.click()} disabled={busy||isDocumentUploading} data-testid="button-import-document">
+          <button type="button" className="import-btn" onClick={()=>documentInput.current?.click()} disabled={busy||isDocumentUploading||authStatus?.authenticated===false} data-testid="button-import-document">
             {isDocumentUploading?<span className="spin import-spinner" aria-hidden="true"/>:<Paperclip size={13}/>}
             {isDocumentUploading?'Обрабатываю документ…':'Импорт документа'}
           </button>
@@ -253,10 +318,10 @@ export default function App(){
             <span className="spin description-spinner" aria-hidden="true"/>
           </span>}
         </div>
-        <button type="button" className="primary-btn" style={{width:'100%'}} onClick={()=>void handleGenerate()} disabled={busy||isDocumentUploading||!userInput.trim()} data-testid="button-generate-bpmn">
+        <button type="button" className="primary-btn" style={{width:'100%'}} onClick={()=>void handleGenerate()} disabled={busy||isDocumentUploading||!userInput.trim()||authStatus?.authenticated===false} data-testid="button-generate-bpmn">
           {isDocumentUploading?'Импортирую документ…':busy?'ИИ проектирует процесс…':'Сгенерировать диаграмму'}
         </button>
-        {busy&&<p className="generation-progress" role="status">Обрабатываем описание. При временном сбое Gemini запрос повторяется автоматически. Это может занять до двух минут.</p>}
+        {busy&&<p className="generation-progress" role="status">Модель строит BPMN XML. Пожалуйста, не закрывайте страницу.</p>}
         {isDocumentUploading&&<p className="generation-progress" role="status" data-testid="status-document-upload">Извлекаю текст и строю диаграмму…</p>}
         {aiError&&<div className="error-box" role="alert" data-testid="status-generation-error">{aiError}</div>}
       </section>
@@ -273,7 +338,7 @@ export default function App(){
         </div>
         <div className="chat-compose">
           <input className="chat-input" value={chatInput} onChange={e=>setChatInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')handleReply();}} disabled={!hasAiMessage||isReplyPending||isDocumentUploading} placeholder="Ваш ответ…" aria-label="Ответ валидатору" data-testid="input-validator-reply"/>
-          <button type="button" className="send-btn" onClick={handleReply} disabled={!hasAiMessage||!chatInput.trim()||isReplyPending||isDocumentUploading} data-testid="button-validator-reply"><Send size={13}/></button>
+          <button type="button" className="send-btn" onClick={handleReply} disabled={!hasAiMessage||!chatInput.trim()||isReplyPending||isDocumentUploading||authStatus?.authenticated===false} data-testid="button-validator-reply"><Send size={13}/></button>
         </div>
       </section>
       <div className="eyebrow" style={{display:'flex',justifyContent:'space-between'}}><span>ЛОГИКА · СХЕМА · ЭКСПОРТ</span><span>v1.0</span></div>

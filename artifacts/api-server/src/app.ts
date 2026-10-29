@@ -3,6 +3,7 @@ import cors from "cors";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import { configureAuth } from "./lib/auth";
 
 const app: Express = express();
 
@@ -25,7 +26,9 @@ app.use(
     },
   }),
 );
-const allowedOrigins = (process.env.CORS_ORIGIN || '')
+const allowedOrigins = [process.env.CORS_ORIGIN, process.env.FRONTEND_URL]
+  .filter(Boolean)
+  .join(",")
   .split(',')
   .map((origin) => origin.trim())
   .filter(Boolean);
@@ -33,7 +36,6 @@ app.use(cors({
   origin(origin, callback) {
     if (
       !origin ||
-      !allowedOrigins.length ||
       allowedOrigins.includes('*') ||
       allowedOrigins.includes(origin)
     ) {
@@ -42,10 +44,12 @@ app.use(cors({
     }
     callback(null, false);
   },
+  credentials: true,
 }));
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true }));
 
+configureAuth(app);
 app.use("/api", router);
 
 const handleBodyError: ErrorRequestHandler = (error, _req, res, next) => {

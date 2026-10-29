@@ -62,6 +62,74 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /bpmn/generate:
+    post:
+      operationId: generateBpmnXml
+      tags: [text-to-bpmn]
+      summary: Generate a BPMN 2.0 XML document through OpenRouter
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BpmnXmlGenerateInput"
+      responses:
+        "200":
+          description: Raw BPMN 2.0 XML
+          content:
+            application/xml:
+              schema:
+                $ref: "#/components/schemas/BpmnXmlGenerateResponse"
+        "400":
+          description: Invalid prompt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Google sign-in is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "402":
+          description: Free generation limit reached
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: The model returned invalid BPMN XML
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: OpenRouter is unavailable or credentials are missing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /auth/me:
+    get:
+      operationId: getAuthStatus
+      tags: [health]
+      summary: Return the current signed-in user and quota status
+      responses:
+        "200":
+          description: Current authentication status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthMeResponse"
+  /auth/logout:
+    post:
+      operationId: logoutUser
+      tags: [health]
+      summary: End the current login session
+      responses:
+        "204":
+          description: Session ended
   /upload-document:
     post:
       operationId: uploadDocument
@@ -198,6 +266,46 @@ components:
           type: string
           minLength: 1
       required: [description]
+    BpmnXmlGenerateInput:
+      type: object
+      properties:
+        textPrompt:
+          type: string
+          minLength: 1
+          maxLength: 60000
+      required: [textPrompt]
+    BpmnXmlGenerateResponse:
+      type: string
+    AuthUser:
+      type: object
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+          format: email
+        isPremium:
+          type: boolean
+        hasActivePremium:
+          type: boolean
+        freeGenerationsLeft:
+          type: integer
+          minimum: 0
+        premiumUntil:
+          type: string
+          format: date-time
+          nullable: true
+        isWhitelisted:
+          type: boolean
+      required: [id, email, isPremium, hasActivePremium, freeGenerationsLeft, premiumUntil, isWhitelisted]
+    AuthMeResponse:
+      type: object
+      properties:
+        authenticated:
+          type: boolean
+        user:
+          $ref: "#/components/schemas/AuthUser"
+      required: [authenticated]
     DocumentUploadInput:
       type: object
       properties:

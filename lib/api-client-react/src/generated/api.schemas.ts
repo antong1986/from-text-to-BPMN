@@ -14,6 +14,32 @@ export interface BpmnGenerateInput {
   description: string;
 }
 
+export interface BpmnXmlGenerateInput {
+  /**
+     * @minLength 1
+     * @maxLength 60000
+     */
+  textPrompt: string;
+}
+
+export type BpmnXmlGenerateResponse = string;
+
+export interface AuthUser {
+  id: number;
+  email: string;
+  isPremium: boolean;
+  hasActivePremium: boolean;
+  /** @minimum 0 */
+  freeGenerationsLeft: number;
+  premiumUntil: string | null;
+  isWhitelisted: boolean;
+}
+
+export interface AuthMeResponse {
+  authenticated: boolean;
+  user?: AuthUser;
+}
+
 export interface DocumentUploadInput {
   file: Blob;
 }

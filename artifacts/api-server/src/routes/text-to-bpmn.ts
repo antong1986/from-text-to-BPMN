@@ -20,6 +20,11 @@ import {
   BPMN_REFINEMENT_SYSTEM_PROMPT,
   BPMN_SPEC_SYSTEM_PROMPT,
 } from "../lib/text-to-bpmn-prompts";
+import {
+  checkBPMNLimits,
+  consumeBPMNGeneration,
+  sendPaymentRequired,
+} from "../middlewares/bpmn-limits";
 
 const router: IRouter = Router();
 
@@ -200,7 +205,7 @@ function receiveDocument(req:Request,res:import("express").Response,next:import(
   });
 }
 
-router.post("/generate", async (req, res): Promise<void> => {
+router.post("/generate", checkBPMNLimits, async (req, res): Promise<void> => {
   const input = GenerateBpmnBody.safeParse(req.body);
   if (!input.success) {
     res.status(400).json({ error: "A non-empty description is required." });
@@ -213,10 +218,14 @@ router.post("/generate", async (req, res): Promise<void> => {
     return;
   }
 
+  if (!(await consumeBPMNGeneration(req))) {
+    sendPaymentRequired(res);
+    return;
+  }
   res.json(GenerateBpmnResponse.parse(result));
 });
 
-router.post("/upload-document",receiveDocument,async(req,res):Promise<void> => {
+router.post("/upload-document",checkBPMNLimits,receiveDocument,async(req,res):Promise<void> => {
   const file=req.file;
   if(!file) {
     res.status(400).json({error:"Выберите файл .docx или .txt для импорта."});
@@ -251,10 +260,14 @@ router.post("/upload-document",receiveDocument,async(req,res):Promise<void> => {
     res.status(500).json({error:"Не удалось обработать документ."});
     return;
   }
+  if (!(await consumeBPMNGeneration(req))) {
+    sendPaymentRequired(res);
+    return;
+  }
   res.json(output.data);
 });
 
-router.post("/refine", async (req, res): Promise<void> => {
+router.post("/refine", checkBPMNLimits, async (req, res): Promise<void> => {
   const input = RefineBpmnBody.safeParse(req.body);
   if (!input.success) {
     res.status(400).json({ error: "A description, clarification, and BPMN graph are required." });
@@ -326,10 +339,14 @@ router.post("/refine", async (req, res): Promise<void> => {
     return;
   }
 
+  if (!(await consumeBPMNGeneration(req))) {
+    sendPaymentRequired(res);
+    return;
+  }
   res.json(output.data);
 });
 
-router.post("/generate-spec", async (req, res): Promise<void> => {
+router.post("/generate-spec", checkBPMNLimits, async (req, res): Promise<void> => {
   const input = GenerateSpecBody.safeParse(req.body);
   if (!input.success) {
     res.status(400).json({ error: "A valid BPMN graph is required." });
@@ -366,6 +383,10 @@ router.post("/generate-spec", async (req, res): Promise<void> => {
     return;
   }
 
+  if (!(await consumeBPMNGeneration(req))) {
+    sendPaymentRequired(res);
+    return;
+  }
   res.json(output.data);
 });
 

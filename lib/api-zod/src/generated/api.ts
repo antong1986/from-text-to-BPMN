@@ -44,6 +44,47 @@ export const GenerateBpmnResponse = zod.object({
 
 
 /**
+ * @summary Generate a BPMN 2.0 XML document through OpenRouter
+ */
+export const generateBpmnXmlBodyTextPromptMax = 60000;
+
+
+
+export const GenerateBpmnXmlBody = zod.object({
+  "textPrompt": zod.string().min(1).max(generateBpmnXmlBodyTextPromptMax)
+})
+
+export const GenerateBpmnXmlResponse = zod.unknown()
+
+
+/**
+ * @summary Return the current signed-in user and quota status
+ */
+export const getAuthStatusResponseUserFreeGenerationsLeftMin = 0;
+
+
+
+export const GetAuthStatusResponse = zod.object({
+  "authenticated": zod.boolean(),
+  "user": zod.object({
+  "id": zod.number().int(),
+  "email": zod.string().email(),
+  "isPremium": zod.boolean(),
+  "hasActivePremium": zod.boolean(),
+  "freeGenerationsLeft": zod.number().int().min(getAuthStatusResponseUserFreeGenerationsLeftMin),
+  "premiumUntil": zod.coerce.date().nullable(),
+  "isWhitelisted": zod.boolean()
+}).optional()
+})
+
+
+/**
+ * @summary End the current login session
+ */
+export const LogoutUserResponse = zod.void()
+
+
+/**
  * @summary Extract a process description from a document and generate its BPMN graph
  */
 export const UploadDocumentBody = zod.object({

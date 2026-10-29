@@ -20,12 +20,15 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AuthMeResponse,
   BpmnGenerateInput,
   BpmnGenerateResponse,
   BpmnRefineInput,
   BpmnRefineResponse,
   BpmnSpecInput,
   BpmnSpecResponse,
+  BpmnXmlGenerateInput,
+  BpmnXmlGenerateResponse,
   DocumentUploadInput,
   DocumentUploadResponse,
   ErrorResponse,
@@ -223,6 +226,245 @@ export const useGenerateBpmn = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getGenerateBpmnMutationOptions(options));
+    }
+
+export const getGenerateBpmnXmlUrl = () => {
+
+
+
+
+  return `/api/bpmn/generate`
+}
+
+/**
+ * @summary Generate a BPMN 2.0 XML document through OpenRouter
+ */
+export const generateBpmnXml = async (bpmnXmlGenerateInput: BpmnXmlGenerateInput, options?: Parameters<typeof customFetch>[1]): Promise<BpmnXmlGenerateResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<BpmnXmlGenerateResponse>(getGenerateBpmnXmlUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(bpmnXmlGenerateInput)
+  }
+);}
+
+
+
+
+
+export const getGenerateBpmnXmlMutationKey = () => ['generateBpmnXml'] as const;
+
+export const getGenerateBpmnXmlMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateBpmnXml>>, TError,GenerateBpmnXmlMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof generateBpmnXml>>, TError,GenerateBpmnXmlMutationVariables, TContext> => {
+
+const mutationKey = getGenerateBpmnXmlMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof generateBpmnXml>>, GenerateBpmnXmlMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  generateBpmnXml(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type GenerateBpmnXmlMutationResult = NonNullable<Awaited<ReturnType<typeof generateBpmnXml>>>
+    export type GenerateBpmnXmlMutationBody = BodyType<BpmnXmlGenerateInput>
+    export type GenerateBpmnXmlMutationError = ErrorType<ErrorResponse>
+    export type GenerateBpmnXmlMutationVariables = {data: BodyType<BpmnXmlGenerateInput>}
+
+    /**
+ * @summary Generate a BPMN 2.0 XML document through OpenRouter
+ */
+export const useGenerateBpmnXml = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateBpmnXml>>, TError,GenerateBpmnXmlMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof generateBpmnXml>>,
+        TError,
+        GenerateBpmnXmlMutationVariables,
+        TContext
+      > => {
+      return useMutation(getGenerateBpmnXmlMutationOptions(options));
+    }
+
+export const getGetAuthStatusUrl = () => {
+
+
+
+
+  return `/api/auth/me`
+}
+
+/**
+ * @summary Return the current signed-in user and quota status
+ */
+export const getAuthStatus = async ( options?: Parameters<typeof customFetch>[1]): Promise<AuthMeResponse> => {
+
+  return customFetch<AuthMeResponse>(getGetAuthStatusUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAuthStatusQueryKey = () => {
+    return [
+    `/api/auth/me`
+    ] as const;
+    }
+
+
+export const getGetAuthStatusQueryOptions = <TData = Awaited<ReturnType<typeof getAuthStatus>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAuthStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAuthStatusQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAuthStatus>>> = ({ signal }) => getAuthStatus({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAuthStatus>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAuthStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getAuthStatus>>>
+export type GetAuthStatusQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Return the current signed-in user and quota status
+ */
+
+export function useGetAuthStatus<TData = Awaited<ReturnType<typeof getAuthStatus>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAuthStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAuthStatusQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getLogoutUserUrl = () => {
+
+
+
+
+  return `/api/auth/logout`
+}
+
+/**
+ * @summary End the current login session
+ */
+export const logoutUser = async ( options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getLogoutUserUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getLogoutUserMutationKey = () => ['logoutUser'] as const;
+
+export const getLogoutUserMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof logoutUser>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof logoutUser>>, TError,void, TContext> => {
+
+const mutationKey = getLogoutUserMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof logoutUser>>, void> = () => {
+
+
+          return  logoutUser(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type LogoutUserMutationResult = NonNullable<Awaited<ReturnType<typeof logoutUser>>>
+
+    export type LogoutUserMutationError = ErrorType<unknown>
+
+
+    /**
+ * @summary End the current login session
+ */
+export const useLogoutUser = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof logoutUser>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof logoutUser>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getLogoutUserMutationOptions(options));
     }
 
 export const getUploadDocumentUrl = () => {

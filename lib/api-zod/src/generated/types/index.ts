@@ -6,6 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './authMeResponse';
+export * from './authUser';
 export * from './bpmnEdge';
 export * from './bpmnGenerateInput';
 export * from './bpmnGenerateResponse';
@@ -16,6 +18,8 @@ export * from './bpmnRefineInput';
 export * from './bpmnRefineResponse';
 export * from './bpmnSpecInput';
 export * from './bpmnSpecResponse';
+export * from './bpmnXmlGenerateInput';
+export * from './bpmnXmlGenerateResponse';
 export * from './documentUploadInput';
 export * from './documentUploadResponse';
 export * from './errorResponse';
