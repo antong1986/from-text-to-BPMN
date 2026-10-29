@@ -36,7 +36,6 @@ app.use(cors({
   origin(origin, callback) {
     if (
       !origin ||
-      allowedOrigins.includes('*') ||
       allowedOrigins.includes(origin)
     ) {
       callback(null, true);

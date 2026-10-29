@@ -3,9 +3,11 @@ export const authTestPage = `<!doctype html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/png" sizes="26x26" href="/favicon.png">
   <title>Проверка авторизации · Text-to-BPMN</title>
   <style>
     :root { font: 16px/1.5 Inter, system-ui, sans-serif; color: #263536; background: #f3f6f3; }
+    [hidden] { display: none !important; }
     body { margin: 0; padding: 32px 16px; }
     main { width: min(720px, 100%); margin: 0 auto; padding: 24px; border: 1px solid #dce4df; border-radius: 16px; background: #fff; box-shadow: 0 12px 32px #26353612; }
     h1 { margin: 0 0 6px; font-size: 22px; }
