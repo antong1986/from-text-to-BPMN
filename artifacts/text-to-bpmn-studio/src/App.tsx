@@ -316,7 +316,6 @@ export default function App(){
           <span className="auth-prompt">{authStatus===null?'Проверка входа…':'Войдите, чтобы генерировать диаграммы'}</span>
           <a className="auth-action" href="/api/auth/google?next=%2F" onClick={()=>saveDescriptionDraft(userInput)}>Войти через Google</a>
         </>}
-        <a className="auth-test-link" href="/api/auth/test">Лимиты</a>
       </div>
       <section>
         <div className="eyebrow" style={{marginBottom:5}}>ШАГ 01 · ОПИСАНИЕ</div>
