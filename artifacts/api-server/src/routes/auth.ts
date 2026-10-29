@@ -16,7 +16,12 @@ function authUnavailable(res: import("express").Response): void {
   });
 }
 
-router.get("/auth/test", (_req, res) => {
+router.get("/auth/test", (req, res) => {
+  if (req.isAuthenticated?.()) {
+    res.redirect("/");
+    return;
+  }
+
   res.type("html").send(authTestPage);
 });
 

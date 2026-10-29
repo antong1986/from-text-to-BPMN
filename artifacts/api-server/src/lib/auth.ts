@@ -151,7 +151,7 @@ export function isSessionSecretConfigured(): boolean {
 
 export function getSafeReturnTo(value: unknown): string {
   if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//")) {
-    return "/api/auth/test";
+    return "/";
   }
   return value;
 }

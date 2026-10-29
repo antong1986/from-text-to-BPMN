@@ -25,8 +25,9 @@ The default callback URI is:
 
 `https://<public-project-domain>/api/auth/google/callback`
 
-Open `/api/auth/test` on the project domain for a sign-in, quota, and XML
-generation test page.
+The studio starts Google sign-in from the canvas and returns users to `/` after
+successful authentication. `/api/auth/test` is a minimal sign-in fallback; it
+does not accept process text or run test generations.
 
 ## Routes
 
