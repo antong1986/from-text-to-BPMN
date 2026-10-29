@@ -67,8 +67,30 @@ function apiErrorMessage(error: unknown, fallback: string): string {
   return fallback;
 }
 
+const DESCRIPTION_DRAFT_KEY = 'text-to-bpmn-description-draft';
+
+function readDescriptionDraft(): string {
+  try {
+    return typeof window === 'undefined'
+      ? ''
+      : window.sessionStorage.getItem(DESCRIPTION_DRAFT_KEY) ?? '';
+  } catch {
+    return '';
+  }
+}
+
+function saveDescriptionDraft(value: string): void {
+  try {
+    if (typeof window === 'undefined') return;
+    if (value) window.sessionStorage.setItem(DESCRIPTION_DRAFT_KEY, value);
+    else window.sessionStorage.removeItem(DESCRIPTION_DRAFT_KEY);
+  } catch {
+    // Storage can be unavailable in private or restricted browsing contexts.
+  }
+}
+
 export default function App(){
-  const [userInput,setUserInput]=useState('');
+  const [userInput,setUserInput]=useState(readDescriptionDraft);
   const [currentXml,setCurrentXml]=useState(MINIMAL_BPMN_XML);
   const [diagramImportVersion,setDiagramImportVersion]=useState(0);
   const [graph,setGraph]=useState<BpmnGraph>({nodes:[],edges:[]});
@@ -129,6 +151,7 @@ export default function App(){
 
   useEffect(()=>{messageEnd.current?.scrollIntoView({behavior:'smooth'});},[chatMessages]);
   useEffect(()=>{void refreshAuth();},[refreshAuth]);
+  useEffect(()=>{saveDescriptionDraft(userInput);},[userInput]);
   useEffect(()=>()=>{replyRequestId.current+=1;uploadRequestId.current+=1;},[]);
   useEffect(()=>{
     if(!isResizing)return;
@@ -274,6 +297,7 @@ export default function App(){
     setIsCopied(true);window.setTimeout(()=>setIsCopied(false),2000);
   };
   const signedInUser=authStatus?.authenticated?authStatus.user:undefined;
+  const needsGoogleLoginForGenerate=authStatus?.authenticated===false&&Boolean(userInput.trim());
 
   return <div className="studio">
     <aside className="control-rail" style={{width:asideWidth,flexBasis:asideWidth}} data-testid="panel-controls">
@@ -290,7 +314,7 @@ export default function App(){
           <button type="button" className="auth-action" onClick={()=>void handleLogout()}>Выйти</button>
         </>:<>
           <span className="auth-prompt">{authStatus===null?'Проверка входа…':'Войдите, чтобы генерировать диаграммы'}</span>
-          <a className="auth-action" href="/api/auth/google?next=%2F">Войти через Google</a>
+          <a className="auth-action" href="/api/auth/google?next=%2F" onClick={()=>saveDescriptionDraft(userInput)}>Войти через Google</a>
         </>}
         <a className="auth-test-link" href="/api/auth/test">Лимиты</a>
       </div>
@@ -318,9 +342,18 @@ export default function App(){
             <span className="spin description-spinner" aria-hidden="true"/>
           </span>}
         </div>
-        <button type="button" className="primary-btn" style={{width:'100%'}} onClick={()=>void handleGenerate()} disabled={busy||isDocumentUploading||!userInput.trim()||authStatus?.authenticated===false} data-testid="button-generate-bpmn">
-          {isDocumentUploading?'Импортирую документ…':busy?'ИИ проектирует процесс…':'Сгенерировать диаграмму'}
-        </button>
+        <div
+          className={`generate-button-wrap${needsGoogleLoginForGenerate?' auth-required':''}`}
+          tabIndex={needsGoogleLoginForGenerate?0:undefined}
+          aria-label={needsGoogleLoginForGenerate?'Войдите через Google, чтобы сгенерировать диаграмму':undefined}
+          aria-describedby={needsGoogleLoginForGenerate?'generate-login-tooltip':undefined}
+          data-testid="generate-button-tooltip"
+        >
+          <button type="button" className="primary-btn" style={{width:'100%'}} onClick={()=>void handleGenerate()} disabled={busy||isDocumentUploading||!userInput.trim()||authStatus?.authenticated===false} data-testid="button-generate-bpmn">
+            {isDocumentUploading?'Импортирую документ…':busy?'ИИ проектирует процесс…':'Сгенерировать диаграмму'}
+          </button>
+          {needsGoogleLoginForGenerate&&<span className="generate-tooltip" id="generate-login-tooltip" role="tooltip">Войдите через Google</span>}
+        </div>
         {busy&&<p className="generation-progress" role="status">Модель строит BPMN XML. Пожалуйста, не закрывайте страницу.</p>}
         {isDocumentUploading&&<p className="generation-progress" role="status" data-testid="status-document-upload">Извлекаю текст и строю диаграмму…</p>}
         {aiError&&<div className="error-box" role="alert" data-testid="status-generation-error">{aiError}</div>}

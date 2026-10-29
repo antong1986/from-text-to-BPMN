@@ -115,6 +115,13 @@ button:disabled { cursor: not-allowed; }
 .primary-btn { display:inline-flex; align-items:center; justify-content:center; text-align:center; min-height:40px; border:0; border-radius:10px; padding:0 15px; background:#26776c; color:#fff; font-size:12px; font-weight:700; letter-spacing:.01em; transition:background .18s,transform .18s; }
 .primary-btn:hover:not(:disabled) { background:#1e655b; transform:translateY(-1px); }
 .primary-btn:disabled { background:#d8dfdd; color:#8c9996; }
+.generate-button-wrap { position:relative; width:100%; }
+.generate-button-wrap.auth-required .primary-btn { pointer-events:none; cursor:not-allowed; }
+.generate-tooltip { position:absolute; z-index:20; left:50%; bottom:calc(100% + 8px); max-width:min(260px,calc(100vw - 32px)); padding:8px 12px; border-radius:4px; background:#4a4d4e; color:#fff; box-shadow:0 3px 10px #17201f33; font-size:12px; font-weight:600; line-height:1.35; text-align:center; white-space:normal; opacity:0; visibility:hidden; pointer-events:none; transform:translate(-50%,4px); transition:opacity .14s ease,transform .14s ease,visibility .14s; }
+.generate-tooltip::after { position:absolute; top:100%; left:50%; width:0; height:0; border:6px solid transparent; border-top-color:#4a4d4e; content:""; transform:translateX(-50%); }
+.generate-button-wrap.auth-required:hover .generate-tooltip,.generate-button-wrap.auth-required:focus .generate-tooltip { opacity:1; visibility:visible; transform:translate(-50%,0); }
+.generate-button-wrap.auth-required:focus-visible { outline:none; }
+.generate-button-wrap.auth-required:focus-visible .primary-btn { outline:2px solid #5a9a8e; outline-offset:3px; }
 .generation-progress { margin:10px 0 0; color:#536d65; font-size:11px; line-height:1.5; }
 .error-box { margin-top:11px; border:1px solid #e9c8bd; background:#fff3ef; border-radius:10px; padding:10px 12px; color:#9d493b; font-size:11px; line-height:1.5; }
 .chat-box { min-height:0; flex:1; display:flex; flex-direction:column; border:1px solid #dce2e0; border-radius:14px; background:#fff; overflow:hidden; }
