@@ -341,7 +341,7 @@ export default function App(){
           </button>
           {needsGoogleLoginForGenerate&&<span className="generate-tooltip" id="generate-login-tooltip" role="tooltip">Войдите через Google</span>}
         </div>
-        {busy&&<p className="generation-progress" role="status">Модель строит BPMN XML. Пожалуйста, не закрывайте страницу.</p>}
+        {busy&&<p className="generation-progress" role="status">Модель строит диаграмму. Пожалуйста, не закрывайте страницу.</p>}
         {isDocumentUploading&&<p className="generation-progress" role="status" data-testid="status-document-upload">Извлекаю текст и строю диаграмму…</p>}
         {aiError&&<div className="error-box" role="alert" data-testid="status-generation-error">{aiError}</div>}
       </section>
