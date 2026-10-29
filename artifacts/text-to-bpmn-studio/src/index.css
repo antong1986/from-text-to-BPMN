@@ -85,11 +85,12 @@ button:disabled { cursor: not-allowed; }
 .brand-mark { width: 38px; height: 38px; border-radius: 12px; display:grid; place-items:center; background:#dcece6; color:#267166; font-weight:800; font-family:var(--app-font-display); letter-spacing:-2px; font-size:19px; }
 .brand-title { font: 800 17px/1.1 var(--app-font-display); letter-spacing:-.6px; }
 .brand-caption { margin-top:5px; color:#758084; font-size:11px; }
-.auth-bar { display:flex; align-items:center; gap:8px; min-width:0; padding:8px 10px; border:1px solid #e2e9e5; border-radius:10px; background:#fbfcfa; }
+.auth-bar { box-sizing:border-box; display:flex; align-items:center; gap:8px; width:240px; height:37px; min-width:0; flex:0 1 240px; padding:3px 8px; border:1px solid #e2e9e5; border-radius:10px; background:#fbfcfa; }
 .auth-summary { display:grid; flex:1; min-width:0; gap:2px; }
 .auth-email { overflow:hidden; color:#354541; font-size:10px; font-weight:700; text-overflow:ellipsis; white-space:nowrap; }
-.auth-quota,.auth-prompt { color:#78847f; font-size:10px; }
-.auth-action { flex:none; border:1px solid #d2ded8; border-radius:7px; padding:6px 9px; background:#fff; color:#356b60; font-size:10px; text-decoration:none; white-space:nowrap; }
+.auth-quota,.auth-prompt { min-width:0; overflow:hidden; color:#78847f; font-size:10px; text-overflow:ellipsis; white-space:nowrap; }
+.auth-prompt { flex:1; }
+.auth-action { display:inline-flex; flex:none; align-items:center; justify-content:center; height:29px; border:1px solid #d2ded8; border-radius:7px; padding:0 9px; background:#fff; color:#356b60; font-size:10px; text-decoration:none; white-space:nowrap; }
 .auth-action:hover { border-color:#9dbcb1; color:#1d695d; }
 .eyebrow { color:#72817f; text-transform:uppercase; letter-spacing:.12em; font:500 10px var(--app-font-mono); }
 .description-head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px; }
@@ -282,8 +283,9 @@ button:disabled { cursor: not-allowed; }
   .control-rail { padding:17px 14px; gap:17px; }
   .work-area { padding:14px 12px; }
   .topbar { align-items:flex-start; flex-direction:column; }
-  .toolbar { width:100%; }
-  .toolbar > * { flex:1; }
+  .toolbar { display:grid; width:100%; grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .toolbar > :last-child { grid-column:1 / -1; width:100%; }
+  .auth-bar { width:100%; flex:initial; }
   .secondary-btn { padding:0 7px; font-size:10px; }
   .examples { flex-wrap:wrap; }
   .canvas-wrap { min-height:430px; }

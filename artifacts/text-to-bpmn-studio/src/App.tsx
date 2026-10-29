@@ -305,18 +305,6 @@ export default function App(){
         <div className="brand-mark" aria-hidden="true">tb</div>
         <div><div className="brand-title">Text-to-BPMN</div><div className="brand-caption">Студия моделирования процессов</div></div>
       </header>
-      <div className="auth-bar" data-testid="auth-status">
-        {signedInUser?<>
-          <div className="auth-summary">
-            <span className="auth-email" title={signedInUser.email}>{signedInUser.email}</span>
-            <span className="auth-quota">{signedInUser.isWhitelisted?'Безлимитный доступ':signedInUser.hasActivePremium?'Активная подписка':`Бесплатно: ${signedInUser.freeGenerationsLeft}`}</span>
-          </div>
-          <button type="button" className="auth-action" onClick={()=>void handleLogout()}>Выйти</button>
-        </>:<>
-          <span className="auth-prompt">{authStatus===null?'Проверка входа…':'Войдите, чтобы генерировать диаграммы'}</span>
-          <a className="auth-action" href="/api/auth/google?next=%2F" onClick={()=>saveDescriptionDraft(userInput)}>Войти через Google</a>
-        </>}
-      </div>
       <section>
         <div className="eyebrow" style={{marginBottom:5}}>ШАГ 01 · ОПИСАНИЕ</div>
         <div className="description-head">
@@ -382,6 +370,18 @@ export default function App(){
         <div className="toolbar">
           <button type="button" className="secondary-btn" disabled={!isValidated} onClick={()=>setSqlSchema(generateSqlSchema(currentXml))} title={!isValidated&&hasGenerated?'Ответьте на вопрос ИИ-валидатора, чтобы подтвердить логику процесса или завершите сценарий вручную':undefined} data-testid="button-generate-sql">Схема БД</button>
           <SpecExportButton xml={currentXml} disabled={!isValidated} hasDiagram={hasGenerated}/>
+          <div className="auth-bar" data-testid="auth-status">
+            {signedInUser?<>
+              <div className="auth-summary">
+                <span className="auth-email" title={signedInUser.email}>{signedInUser.email}</span>
+                <span className="auth-quota">{signedInUser.isWhitelisted?'Безлимитный доступ':signedInUser.hasActivePremium?'Активная подписка':`Бесплатно: ${signedInUser.freeGenerationsLeft}`}</span>
+              </div>
+              <button type="button" className="auth-action" onClick={()=>void handleLogout()}>Выйти</button>
+            </>:<>
+              <span className="auth-prompt" title="Войдите, чтобы генерировать диаграммы">{authStatus===null?'Проверка входа…':'Войдите, чтобы генерировать диаграммы'}</span>
+              <a className="auth-action" href="/api/auth/google?next=%2F" onClick={()=>saveDescriptionDraft(userInput)}>Войти через Google</a>
+            </>}
+          </div>
         </div>
       </header>
       <div className="canvas-wrap" data-testid="panel-bpmn-canvas">
