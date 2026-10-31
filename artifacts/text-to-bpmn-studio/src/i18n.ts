@@ -410,6 +410,9 @@ const errorPairs: Array<[string, string]> = [
   ['Модель не внесла изменение в диаграмму. Попробуйте описать, на каком шаге должна появиться новая ветвь или действие.', 'The model did not change the diagram. Specify where the new branch or action should appear.'],
   ['OPENROUTER_API_KEY не настроен в Secrets проекта.', 'OPENROUTER_API_KEY is not configured in the project Secrets.'],
   ['OpenRouter не смог построить диаграмму. Проверьте настройки модели и API-ключ.', 'OpenRouter could not build the diagram. Check the model settings and API key.'],
+  ['В BPMN найдены русские подписи, хотя исходное описание написано на английском.', 'Russian BPMN labels were found even though the source description is English.'],
+  ['В BPMN найдены английские подписи, хотя исходное описание написано на русском.', 'English BPMN labels were found even though the source description is Russian.'],
+  ['Язык подписей BPMN не соответствует языку исходного описания.', 'The BPMN label language does not match the source description.'],
   ['OpenRouter продолжает ограничивать запросы после повторных попыток. Проверьте квоту модели и повторите запрос позже.', 'OpenRouter is still rate-limiting requests after retries. Check the model quota and try again later.'],
   ['OpenRouter не ответил после повторных попыток. Проверьте доступность модели и повторите запрос позже.', 'OpenRouter did not respond after several attempts. Check model availability and try again later.'],
   ['OpenRouter не ответил на автоматическую попытку исправления. Повторите запрос позже.', 'OpenRouter did not respond to the automatic correction attempt. Please try again later.'],
@@ -518,7 +521,8 @@ export function localizeKnownError(message: string, language: Language): string 
 
   const correctionPrefix = 'Модель не вернула корректный BPMN XML даже после автоматического исправления. Причина: ';
   if (message.startsWith(correctionPrefix) && language === 'en') {
-    return `The model returned invalid BPMN XML even after automatic correction. Reason: ${message.slice(correctionPrefix.length)}`;
+    const reason=message.slice(correctionPrefix.length);
+    return `The model returned invalid BPMN XML even after automatic correction. Reason: ${localizeKnownError(reason,'en')}`;
   }
 
   const invalidDiagramSql = '-- Не удалось разобрать BPMN-схему';

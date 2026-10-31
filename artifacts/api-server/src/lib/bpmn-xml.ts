@@ -2,6 +2,38 @@ import { BpmnModdle } from "bpmn-moddle";
 
 const moddle = new BpmnModdle();
 
+export type BpmnSourceLanguage = "en" | "ru";
+
+export function detectBpmnSourceLanguage(text: string): BpmnSourceLanguage {
+  const cyrillicCount = [...text.matchAll(/\p{Script=Cyrillic}/gu)].length;
+  const latinCount = [...text.matchAll(/\p{Script=Latin}/gu)].length;
+  return cyrillicCount > latinCount ? "ru" : "en";
+}
+
+export function buildBpmnSourceLanguageInstruction(language: BpmnSourceLanguage): string {
+  return language === "en"
+    ? "ЯЗЫКОВОЙ РЕЖИМ: ENGLISH. Исходное описание на английском. Все видимые текстовые подписи BPMN должны быть на английском: названия событий, задач и шлюзов, а также подписи и условия потоков. Не оставляй русские подписи. Сохраняй смысл и структуру процесса; переводи только текстовые подписи."
+    : "ЯЗЫКОВОЙ РЕЖИМ: РУССКИЙ. Исходное описание на русском. Все видимые текстовые подписи BPMN должны быть на русском: названия событий, задач и шлюзов, а также подписи и условия потоков. Не оставляй английские подписи. Сохраняй смысл и структуру процесса; переводи только текстовые подписи.";
+}
+
+function labelUsesWrongLanguage(label: string, language: BpmnSourceLanguage): boolean {
+  const letters = [...label].filter((character) => /\p{L}/u.test(character));
+  if (letters.length < 4) return false;
+  const wrongScriptCount = letters.filter((character) =>
+    language === "en"
+      ? /\p{Script=Cyrillic}/u.test(character)
+      : /\p{Script=Latin}/u.test(character),
+  ).length;
+  return wrongScriptCount / letters.length >= 0.5;
+}
+
+export function hasBpmnLabelsInWrongLanguage(
+  labels: string[],
+  language: BpmnSourceLanguage,
+): boolean {
+  return labels.some((label) => labelUsesWrongLanguage(label, language));
+}
+
 export function cleanAssistantXml(value: string): string {
   let cleaned = value
     .trim()
@@ -37,7 +69,10 @@ function invalid(reason: string): BpmnXmlValidationResult {
   return { valid: false, reason };
 }
 
-export async function validateBpmnXml(xml: string): Promise<BpmnXmlValidationResult> {
+export async function validateBpmnXml(
+  xml: string,
+  expectedLanguage?: BpmnSourceLanguage,
+): Promise<BpmnXmlValidationResult> {
   if (!xml.trim()) {
     return invalid("Ответ модели не содержит XML-код.");
   }
@@ -144,6 +179,18 @@ export async function validateBpmnXml(xml: string): Promise<BpmnXmlValidationRes
   );
   if (missingEdgeFlow) {
     return invalid(`Не найден BPMNEdge для sequenceFlow "${missingEdgeFlow.id ?? "(без id)"}".`);
+  }
+
+  if (expectedLanguage) {
+    const labels = flowElements
+      .map((element) => (element as unknown as { name?: unknown }).name)
+      .filter((label): label is string => typeof label === "string" && label.trim().length > 0);
+
+    if (hasBpmnLabelsInWrongLanguage(labels, expectedLanguage)) {
+      return invalid(expectedLanguage === "en"
+        ? "В BPMN найдены русские подписи, хотя исходное описание написано на английском."
+        : "В BPMN найдены английские подписи, хотя исходное описание написано на русском.");
+    }
   }
 
   return { valid: true, reason: null };

@@ -24,5 +24,12 @@ test("known server errors are localized for the selected interface", () => {
     localizeKnownError("Gemini returned an empty response.", "ru"),
     "Gemini вернул пустой ответ.",
   );
+  assert.match(
+    localizeKnownError(
+      "Модель не вернула корректный BPMN XML даже после автоматического исправления. Причина: В BPMN найдены русские подписи, хотя исходное описание написано на английском.",
+      "en",
+    ),
+    /Russian BPMN labels were found/,
+  );
 });
 

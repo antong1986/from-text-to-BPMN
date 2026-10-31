@@ -16,6 +16,11 @@ import {
   GenerateSpecResponse,
 } from "@workspace/api-zod";
 import {
+  buildBpmnSourceLanguageInstruction,
+  detectBpmnSourceLanguage,
+  hasBpmnLabelsInWrongLanguage,
+} from "../lib/bpmn-xml";
+import {
   BPMN_GRAPH_SYSTEM_PROMPT,
   BPMN_REFINEMENT_SYSTEM_PROMPT,
   BPMN_SPEC_SYSTEM_PROMPT,
@@ -149,9 +154,14 @@ async function generateGraphFromDescription(
   description: string,
   req: Request,
 ): Promise<{graph:GeneratedGraph}|{error:string;status:number}> {
+  const sourceLanguage = detectBpmnSourceLanguage(description);
+  const systemPrompt = `${BPMN_GRAPH_SYSTEM_PROMPT}\n\n${buildBpmnSourceLanguageInstruction(sourceLanguage)}`;
   const result = await callModel(
     [
-      { role: "system", content: BPMN_GRAPH_SYSTEM_PROMPT },
+      {
+        role: "system",
+        content: systemPrompt,
+      },
       { role: "user", content: description.trim() },
     ],
     req,
@@ -175,7 +185,51 @@ async function generateGraphFromDescription(
     );
     return {status:502,error:"Gemini returned a graph in an invalid format."};
   }
-  return {graph:output.data.graph};
+  const initialGraph = output.data.graph;
+  const getLabels = (candidate: GeneratedGraph) => [
+    ...candidate.nodes.map((node) => node.name),
+    ...candidate.edges.map((edge) => edge.condition ?? ""),
+  ];
+  if (!hasBpmnLabelsInWrongLanguage(getLabels(initialGraph), sourceLanguage)) {
+    return {graph:initialGraph};
+  }
+
+  req.log.warn(
+    {model:getAiModelName(),sourceLanguage},
+    "Gemini graph labels did not match the source description language; requesting one correction",
+  );
+  const correctionText = sourceLanguage === "en"
+    ? `The process description is in English, but the graph contains Russian labels. Translate every node name and branch condition into English. Preserve the graph structure, ids, node types, and meaning. Return only the corrected JSON graph.\n\nDescription:\n${description}\n\nGraph to correct:\n${JSON.stringify(initialGraph)}`
+    : `Описание процесса написано на русском, но в графе есть английские подписи. Переведи все названия узлов и условия веток на русский. Сохрани структуру графа, id, типы узлов и смысл. Верни только исправленный JSON-граф.\n\nОписание:\n${description}\n\nГраф для исправления:\n${JSON.stringify(initialGraph)}`;
+  const correction = await callModel(
+    [
+      {role:"system",content:systemPrompt},
+      {role:"user",content:correctionText},
+    ],
+    req,
+    true,
+  );
+  if ("error" in correction) return correction;
+
+  let correctedGraph: unknown;
+  try {
+    correctedGraph = parseBpmnGraph(correction.content);
+  } catch {
+    req.log.warn({model:getAiModelName()},"Gemini language correction was not a JSON graph");
+    return {status:502,error:"Gemini did not return a valid BPMN graph."};
+  }
+  const correctedOutput = GenerateBpmnResponse.safeParse({graph:correctedGraph});
+  if (!correctedOutput.success) {
+    req.log.warn(
+      {model:getAiModelName(),validation:correctedOutput.error.message},
+      "Gemini language correction did not match the BPMN contract",
+    );
+    return {status:502,error:"Gemini returned a graph in an invalid format."};
+  }
+  if (hasBpmnLabelsInWrongLanguage(getLabels(correctedOutput.data.graph),sourceLanguage)) {
+    return {status:502,error:"Язык подписей BPMN не соответствует языку исходного описания."};
+  }
+  return {graph:correctedOutput.data.graph};
 }
 
 const documentUpload = multer({
@@ -275,9 +329,13 @@ router.post("/refine", checkBPMNLimits, async (req, res): Promise<void> => {
   }
 
   const previousGraph = input.data.graph;
+  const sourceLanguage = detectBpmnSourceLanguage(input.data.description);
   const result = await callModel(
     [
-      { role: "system", content: BPMN_REFINEMENT_SYSTEM_PROMPT },
+      {
+        role: "system",
+        content: `${BPMN_REFINEMENT_SYSTEM_PROMPT}\n\n${buildBpmnSourceLanguageInstruction(sourceLanguage)}`,
+      },
       {
         role: "user",
         content: JSON.stringify({

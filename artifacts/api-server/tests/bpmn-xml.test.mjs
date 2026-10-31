@@ -1,8 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  buildBpmnSourceLanguageInstruction,
   buildBpmnCorrectionPrompt,
   cleanAssistantXml,
+  detectBpmnSourceLanguage,
+  hasBpmnLabelsInWrongLanguage,
   isCompleteBpmnXml,
   validateBpmnXml,
 } from "../src/lib/bpmn-xml.ts";
@@ -41,6 +44,27 @@ test("cleans markdown fences, introductory text, and trailing commentary", () =>
 test("accepts a BPMN document with valid nodes, references, shapes, and edges", async () => {
   assert.equal(await isCompleteBpmnXml(validXml), true);
   assert.deepEqual(await validateBpmnXml(validXml), { valid: true, reason: null });
+});
+
+test("detects the dominant language and rejects labels that conflict with the prompt", async () => {
+  assert.equal(detectBpmnSourceLanguage("The buyer submits an order and pays online."), "en");
+  assert.equal(detectBpmnSourceLanguage("Покупатель creates заказ через API."), "ru");
+  assert.match(buildBpmnSourceLanguageInstruction("en"), /ЯЗЫКОВОЙ РЕЖИМ: ENGLISH/);
+
+  const russianXml = validXml
+    .replace('name="Start"', 'name="Начало"')
+    .replace('name="Review request"', 'name="Проверить заявку"')
+    .replace('name="Done"', 'name="Завершение"');
+  assert.equal((await validateBpmnXml(russianXml, "ru")).valid, true);
+  const mismatch = await validateBpmnXml(russianXml, "en");
+  assert.equal(mismatch.valid, false);
+  assert.match(mismatch.reason, /русские подписи/);
+
+  assert.equal((await validateBpmnXml(validXml, "en")).valid, true);
+  assert.match((await validateBpmnXml(validXml, "ru")).reason, /английские подписи/);
+  assert.equal(hasBpmnLabelsInWrongLanguage(["Start", "Review request"], "en"), false);
+  assert.equal(hasBpmnLabelsInWrongLanguage(["Начало", "Проверить заявку"], "en"), true);
+  assert.equal(hasBpmnLabelsInWrongLanguage(["Проверить API"], "ru"), false);
 });
 
 test("accepts user and service tasks but rejects generic task types", async () => {

@@ -2,7 +2,9 @@ import { Router, type IRouter } from "express";
 import { checkBPMNLimits, consumeBPMNGeneration, sendPaymentRequired } from "../middlewares/bpmn-limits";
 import {
   buildBpmnCorrectionPrompt,
+  buildBpmnSourceLanguageInstruction,
   cleanAssistantXml,
+  detectBpmnSourceLanguage,
   validateBpmnXml,
 } from "../lib/bpmn-xml";
 import { fetchWithRetry } from "../lib/fetch-with-retry";
@@ -56,6 +58,8 @@ router.post("/bpmn/generate", checkBPMNLimits, async (req, res): Promise<void> =
     });
     return;
   }
+  const sourceLanguage = detectBpmnSourceLanguage(textPrompt);
+  const localizedSystemPrompt = `${BPMN_XML_SYSTEM_PROMPT}\n\n${buildBpmnSourceLanguageInstruction(sourceLanguage)}`;
 
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
@@ -96,7 +100,7 @@ router.post("/bpmn/generate", checkBPMNLimits, async (req, res): Promise<void> =
     try {
       const payload: unknown = await response.json();
       const xml = extractAssistantXml(payload) ?? "";
-      return { xml, validation: await validateBpmnXml(xml) };
+      return { xml, validation: await validateBpmnXml(xml, sourceLanguage) };
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       return {
@@ -130,7 +134,7 @@ router.post("/bpmn/generate", checkBPMNLimits, async (req, res): Promise<void> =
   let response: Response;
   try {
     response = await requestModel([
-      { role: "system", content: BPMN_XML_SYSTEM_PROMPT },
+      { role: "system", content: localizedSystemPrompt },
       { role: "user", content: textPrompt },
     ], "initial");
   } catch (error) {
@@ -161,7 +165,7 @@ router.post("/bpmn/generate", checkBPMNLimits, async (req, res): Promise<void> =
     const correctionPrompt = buildBpmnCorrectionPrompt(textPrompt, result.xml, firstError);
     try {
       response = await requestModel([
-        { role: "system", content: BPMN_XML_SYSTEM_PROMPT },
+        { role: "system", content: localizedSystemPrompt },
         { role: "user", content: correctionPrompt },
       ], "self-correction");
     } catch (error) {
