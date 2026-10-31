@@ -6,6 +6,8 @@ test("English is the default locale and both interface dictionaries are availabl
   assert.equal(getInitialLanguage(), "en");
   assert.equal(getUiText("en").generateDiagram, "Generate diagram");
   assert.equal(getUiText("ru").generateDiagram, "Сгенерировать диаграмму");
+  assert.equal(getUiText("en").chatEmptyFirstLine, "Questions and suggestions about");
+  assert.equal(getUiText("en").chatEmptySecondLine, "the generated diagram will appear here");
 });
 
 test("BPMN editor tooltips switch languages in both directions", () => {
