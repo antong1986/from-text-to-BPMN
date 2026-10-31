@@ -1,6 +1,17 @@
+import { PRODUCTION_FRONTEND_ORIGIN } from "./cross-origin-auth";
+
+function getDefaultReturnTo(): string {
+  return process.env.NODE_ENV === "production"
+    ? `${PRODUCTION_FRONTEND_ORIGIN}/`
+    : "/";
+}
+
 export function getSafeReturnTo(value: unknown): string {
+  const fallback = getDefaultReturnTo();
+  const isProduction = process.env.NODE_ENV === "production";
+
   if (typeof value !== "string" || !value.trim() || /[\u0000-\u001f]/.test(value)) {
-    return "/";
+    return fallback;
   }
 
   const candidate = value.trim();
@@ -9,10 +20,12 @@ export function getSafeReturnTo(value: unknown): string {
     !candidate.startsWith("//") &&
     !candidate.includes("\\")
   ) {
-    return candidate;
+    return isProduction
+      ? new URL(candidate, PRODUCTION_FRONTEND_ORIGIN).toString()
+      : candidate;
   }
 
-  const allowedOrigins = (process.env.FRONTEND_URL ?? "")
+  const configuredOrigins = (process.env.FRONTEND_URL ?? "")
     .split(",")
     .map((origin) => {
       try {
@@ -23,6 +36,10 @@ export function getSafeReturnTo(value: unknown): string {
       }
     })
     .filter((origin): origin is string => origin !== null);
+  const allowedOrigins = new Set([
+    ...configuredOrigins,
+    ...(isProduction ? [PRODUCTION_FRONTEND_ORIGIN] : []),
+  ]);
 
   try {
     const url = new URL(candidate);
@@ -30,7 +47,7 @@ export function getSafeReturnTo(value: unknown): string {
       url.protocol === "https:" &&
       !url.username &&
       !url.password &&
-      allowedOrigins.includes(url.origin)
+      allowedOrigins.has(url.origin)
     ) {
       return url.toString();
     }
@@ -38,5 +55,5 @@ export function getSafeReturnTo(value: unknown): string {
     // Reject malformed or untrusted redirect targets.
   }
 
-  return "/";
+  return fallback;
 }
