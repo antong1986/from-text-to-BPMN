@@ -53,6 +53,8 @@ router.get("/auth/google/callback", (req, res, next) => {
       return;
     }
 
+    // Passport regenerates the session in logIn(), so capture this before login.
+    const returnTo = getSafeReturnTo(req.session.oauthReturnTo);
     req.logIn(user, (loginError) => {
       if (loginError) {
         req.log.error({ error: loginError }, "Could not create authenticated session");
@@ -60,8 +62,6 @@ router.get("/auth/google/callback", (req, res, next) => {
         return;
       }
 
-      const returnTo = getSafeReturnTo(req.session.oauthReturnTo);
-      delete req.session.oauthReturnTo;
       req.session.save((saveError) => {
         if (saveError) {
           req.log.error({ error: saveError }, "Could not persist authenticated session");
