@@ -1,6 +1,7 @@
 import { pool } from "@workspace/db";
 import { logger } from "./lib/logger";
 import { ensureSessionStoreTable } from "./lib/session-store";
+import { ensureUsersTable } from "./lib/user-store";
 
 const rawPort = process.env["PORT"];
 
@@ -18,6 +19,7 @@ if (Number.isNaN(port) || port <= 0) {
 
 async function startServer(): Promise<void> {
   try {
+    await ensureUsersTable((sql) => pool.query(sql));
     await ensureSessionStoreTable((sql) => pool.query(sql));
 
     const { default: app } = await import("./app");
@@ -31,7 +33,7 @@ async function startServer(): Promise<void> {
   } catch (err) {
     logger.error(
       { err },
-      "Failed to initialize PostgreSQL session table; server will not start",
+      "Failed to initialize PostgreSQL auth tables; server will not start",
     );
     process.exit(1);
   }
