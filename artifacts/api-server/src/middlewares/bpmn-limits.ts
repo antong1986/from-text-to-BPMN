@@ -1,5 +1,6 @@
 import type { RequestHandler, Response } from "express";
 import { pool } from "@workspace/db";
+import { logger } from "../lib/logger";
 import type { AppUser } from "../types/app-user";
 import { isPremiumQuotaExceeded, PREMIUM_GENERATION_LIMIT } from "../lib/premium-quota";
 
@@ -15,6 +16,32 @@ const TOTAL_GENERATIONS_INCREMENT_SQL = `
       GREATEST(0, premium_generations_used) + 1
     ELSE total_generations + 1
   END`;
+let totalGenerationsColumnExists: boolean | undefined;
+let missingCounterWarningLogged = false;
+
+async function supportsCumulativeGenerationCounter(
+  req: Express.Request,
+): Promise<boolean> {
+  if (totalGenerationsColumnExists === undefined) {
+    const result = await pool.query(
+      `SELECT EXISTS (
+         SELECT 1
+         FROM information_schema.columns
+         WHERE table_schema = current_schema()
+           AND table_name = 'users'
+           AND column_name = 'total_generations'
+       ) AS available`,
+    );
+    totalGenerationsColumnExists = result.rows[0]?.available === true;
+  }
+  if (!totalGenerationsColumnExists && !missingCounterWarningLogged) {
+    logger.warn(
+      "Cumulative generation counter is unavailable in this database; using legacy quota counts.",
+    );
+    missingCounterWarningLogged = true;
+  }
+  return totalGenerationsColumnExists;
+}
 
 export const checkBPMNLimits: RequestHandler = async (req, res, next) => {
   if (!req.isAuthenticated?.() || !req.user) {
@@ -77,10 +104,13 @@ export async function consumeBPMNGeneration(req: Express.Request): Promise<boole
   if (!req.user) return false;
 
   const user = req.user as AppUser;
+  const tracksTotalGenerations = await supportsCumulativeGenerationCounter(req);
   if (req.bpmnLimitMode === "premium") {
     const result = await pool.query(
       `UPDATE users
-       SET total_generations = ${TOTAL_GENERATIONS_INCREMENT_SQL},
+       SET ${tracksTotalGenerations
+         ? `total_generations = ${TOTAL_GENERATIONS_INCREMENT_SQL},`
+         : ""}
            premium_window_started_at = CASE
              WHEN premium_window_started_at IS NULL
                OR premium_window_started_at <= NOW() - ${PREMIUM_WINDOW_SQL}
@@ -106,6 +136,7 @@ export async function consumeBPMNGeneration(req: Express.Request): Promise<boole
   }
 
   if (req.bpmnLimitMode === "whitelisted") {
+    if (!tracksTotalGenerations) return true;
     const result = await pool.query(
       `UPDATE users
        SET total_generations = ${TOTAL_GENERATIONS_INCREMENT_SQL}
@@ -120,10 +151,12 @@ export async function consumeBPMNGeneration(req: Express.Request): Promise<boole
 
   const result = await pool.query(
     `UPDATE users
-     SET total_generations = ${TOTAL_GENERATIONS_INCREMENT_SQL},
+     SET ${tracksTotalGenerations
+       ? `total_generations = ${TOTAL_GENERATIONS_INCREMENT_SQL},`
+       : ""}
          free_generations_left = free_generations_left - 1
      WHERE id = $1 AND free_generations_left > 0
-     RETURNING free_generations_left, total_generations`,
+     RETURNING free_generations_left${tracksTotalGenerations ? ", total_generations" : ""}`,
     [user.id],
   );
 

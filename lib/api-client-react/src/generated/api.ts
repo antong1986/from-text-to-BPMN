@@ -20,6 +20,7 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AdminSnapshotResponse,
   AdminStatsResponse,
   AdminUserResponse,
   AdminUsersResponse,
@@ -35,6 +36,8 @@ import type {
   DocumentUploadInput,
   DocumentUploadResponse,
   ErrorResponse,
+  GetAdminInternalSnapshotParams,
+  GetAdminProductionSnapshotParams,
   GetAdminUsersParams,
   HealthStatus
 } from './api.schemas';
@@ -137,12 +140,6 @@ export function useHealthCheck<TData = Awaited<ReturnType<typeof healthCheck>>, 
 
   return withQueryKey(query, queryOptions.queryKey);
 }
-
-
-
-
-
-
 
 export const getGenerateBpmnUrl = () => {
 
@@ -390,12 +387,6 @@ export function useGetAuthStatus<TData = Awaited<ReturnType<typeof getAuthStatus
 
   return withQueryKey(query, queryOptions.queryKey);
 }
-
-
-
-
-
-
 
 export const getLogoutUserUrl = () => {
 
@@ -793,13 +784,6 @@ export function useGetAdminStats<TData = Awaited<ReturnType<typeof getAdminStats
 
   return withQueryKey(query, queryOptions.queryKey);
 }
-
-
-
-
-
-
-
 export const getGetAdminUsersUrl = (params?: GetAdminUsersParams,) => {
   const normalizedParams = new URLSearchParams();
 
@@ -877,11 +861,6 @@ export function useGetAdminUsers<TData = Awaited<ReturnType<typeof getAdminUsers
 
   return withQueryKey(query, queryOptions.queryKey);
 }
-
-
-
-
-
 
 
 export const getToggleAdminUserWhitelistUrl = (id: number,) => {
@@ -1032,3 +1011,164 @@ export const useGrantAdminUserPremium = <TError = ErrorType<void | ErrorResponse
       return useMutation(getGrantAdminUserPremiumMutationOptions(options));
     }
 
+export const getGetAdminProductionSnapshotUrl = (params?: GetAdminProductionSnapshotParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/admin/production-snapshot?${stringifiedParams}` : `/api/admin/production-snapshot`
+}
+
+/**
+ * @summary Read production dashboard data through the administrator API
+ */
+export const getAdminProductionSnapshot = async (params?: GetAdminProductionSnapshotParams, options?: Parameters<typeof customFetch>[1]): Promise<AdminSnapshotResponse> => {
+
+  return customFetch<AdminSnapshotResponse>(getGetAdminProductionSnapshotUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminProductionSnapshotQueryKey = (params?: GetAdminProductionSnapshotParams,) => {
+    return [
+    `/api/admin/production-snapshot`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetAdminProductionSnapshotQueryOptions = <TData = Awaited<ReturnType<typeof getAdminProductionSnapshot>>, TError = ErrorType<void | ErrorResponse>>(params?: GetAdminProductionSnapshotParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminProductionSnapshot>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminProductionSnapshotQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminProductionSnapshot>>> = ({ signal }) => getAdminProductionSnapshot(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminProductionSnapshot>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAdminProductionSnapshotQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminProductionSnapshot>>>
+export type GetAdminProductionSnapshotQueryError = ErrorType<void | ErrorResponse>
+
+
+/**
+ * @summary Read production dashboard data through the administrator API
+ */
+
+export function useGetAdminProductionSnapshot<TData = Awaited<ReturnType<typeof getAdminProductionSnapshot>>, TError = ErrorType<void | ErrorResponse>>(
+ params?: GetAdminProductionSnapshotParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminProductionSnapshot>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAdminProductionSnapshotQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetAdminInternalSnapshotUrl = (params?: GetAdminInternalSnapshotParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/admin/internal/snapshot?${stringifiedParams}` : `/api/admin/internal/snapshot`
+}
+
+/**
+ * @summary Read a production snapshot for a trusted server
+ */
+export const getAdminInternalSnapshot = async (params?: GetAdminInternalSnapshotParams, options?: Parameters<typeof customFetch>[1]): Promise<AdminSnapshotResponse> => {
+
+  return customFetch<AdminSnapshotResponse>(getGetAdminInternalSnapshotUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminInternalSnapshotQueryKey = (params?: GetAdminInternalSnapshotParams,) => {
+    return [
+    `/api/admin/internal/snapshot`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetAdminInternalSnapshotQueryOptions = <TData = Awaited<ReturnType<typeof getAdminInternalSnapshot>>, TError = ErrorType<void | ErrorResponse>>(params?: GetAdminInternalSnapshotParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminInternalSnapshot>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminInternalSnapshotQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminInternalSnapshot>>> = ({ signal }) => getAdminInternalSnapshot(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminInternalSnapshot>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAdminInternalSnapshotQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminInternalSnapshot>>>
+export type GetAdminInternalSnapshotQueryError = ErrorType<void | ErrorResponse>
+
+
+/**
+ * @summary Read a production snapshot for a trusted server
+ */
+
+export function useGetAdminInternalSnapshot<TData = Awaited<ReturnType<typeof getAdminInternalSnapshot>>, TError = ErrorType<void | ErrorResponse>>(
+ params?: GetAdminInternalSnapshotParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminInternalSnapshot>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAdminInternalSnapshotQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}

@@ -123,6 +123,11 @@ export interface AdminUser {
   freeGenerationsLeft: number;
 }
 
+export interface AdminSnapshotResponse {
+  stats: AdminStatsResponse;
+  users: AdminUser[];
+}
+
 export interface AdminUsersResponse {
   users: AdminUser[];
 }
@@ -136,6 +141,22 @@ export interface ErrorResponse {
 }
 
 export type GetAdminUsersParams = {
+/**
+ * Filter users by email substring
+ * @maxLength 255
+ */
+email?: string;
+};
+
+export type GetAdminProductionSnapshotParams = {
+/**
+ * Filter production users by email substring
+ * @maxLength 255
+ */
+email?: string;
+};
+
+export type GetAdminInternalSnapshotParams = {
 /**
  * Filter users by email substring
  * @maxLength 255

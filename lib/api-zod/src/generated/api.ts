@@ -270,3 +270,79 @@ export const GrantAdminUserPremiumResponse = zod.object({
 })
 
 
+/**
+ * @summary Read production dashboard data through the administrator API
+ */
+export const getAdminProductionSnapshotQueryEmailMax = 255;
+
+
+
+export const GetAdminProductionSnapshotQueryParams = zod.object({
+  "email": zod.coerce.string().max(getAdminProductionSnapshotQueryEmailMax).optional().describe('Filter production users by email substring')
+})
+
+export const getAdminProductionSnapshotResponseStatsTotalUsersMin = 0;
+
+export const getAdminProductionSnapshotResponseStatsActivePremiumSubscriptionsMin = 0;
+
+export const getAdminProductionSnapshotResponseStatsTotalGenerationsMin = 0;
+
+export const getAdminProductionSnapshotResponseUsersItemFreeGenerationsLeftMin = 0;
+
+
+
+export const GetAdminProductionSnapshotResponse = zod.object({
+  "stats": zod.object({
+  "totalUsers": zod.number().int().min(getAdminProductionSnapshotResponseStatsTotalUsersMin),
+  "activePremiumSubscriptions": zod.number().int().min(getAdminProductionSnapshotResponseStatsActivePremiumSubscriptionsMin),
+  "totalGenerations": zod.number().int().min(getAdminProductionSnapshotResponseStatsTotalGenerationsMin)
+}),
+  "users": zod.array(zod.object({
+  "id": zod.number().int(),
+  "email": zod.string().email(),
+  "isPremium": zod.boolean(),
+  "premiumUntil": zod.coerce.date().nullable(),
+  "isWhitelisted": zod.boolean(),
+  "freeGenerationsLeft": zod.number().int().min(getAdminProductionSnapshotResponseUsersItemFreeGenerationsLeftMin)
+}))
+})
+
+
+/**
+ * @summary Read a production snapshot for a trusted server
+ */
+export const getAdminInternalSnapshotQueryEmailMax = 255;
+
+
+
+export const GetAdminInternalSnapshotQueryParams = zod.object({
+  "email": zod.coerce.string().max(getAdminInternalSnapshotQueryEmailMax).optional().describe('Filter users by email substring')
+})
+
+export const getAdminInternalSnapshotResponseStatsTotalUsersMin = 0;
+
+export const getAdminInternalSnapshotResponseStatsActivePremiumSubscriptionsMin = 0;
+
+export const getAdminInternalSnapshotResponseStatsTotalGenerationsMin = 0;
+
+export const getAdminInternalSnapshotResponseUsersItemFreeGenerationsLeftMin = 0;
+
+
+
+export const GetAdminInternalSnapshotResponse = zod.object({
+  "stats": zod.object({
+  "totalUsers": zod.number().int().min(getAdminInternalSnapshotResponseStatsTotalUsersMin),
+  "activePremiumSubscriptions": zod.number().int().min(getAdminInternalSnapshotResponseStatsActivePremiumSubscriptionsMin),
+  "totalGenerations": zod.number().int().min(getAdminInternalSnapshotResponseStatsTotalGenerationsMin)
+}),
+  "users": zod.array(zod.object({
+  "id": zod.number().int(),
+  "email": zod.string().email(),
+  "isPremium": zod.boolean(),
+  "premiumUntil": zod.coerce.date().nullable(),
+  "isWhitelisted": zod.boolean(),
+  "freeGenerationsLeft": zod.number().int().min(getAdminInternalSnapshotResponseUsersItemFreeGenerationsLeftMin)
+}))
+})
+
+

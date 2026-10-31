@@ -2,10 +2,15 @@ import { useEffect, useState } from "react";
 import { ArrowLeft, Crown, RefreshCw, Search, ShieldCheck, Users } from "lucide-react";
 
 type AdminLanguage = "en" | "ru";
+type AdminSource = "development" | "production";
 type AdminStats = {
   totalUsers: number;
   activePremiumSubscriptions: number;
   totalGenerations: number;
+};
+type AdminSnapshot = {
+  stats: AdminStats;
+  users: AdminUser[];
 };
 type AdminUser = {
   id: number;
@@ -51,6 +56,11 @@ const copy = {
     retry: "Retry",
     signedInAs: "Signed in as",
     refreshing: "Refreshing…",
+    development: "Development",
+    production: "Production",
+    dataSource: "Data source",
+    productionReadOnly: "Production data is read-only here. User changes are disabled.",
+    productionUnavailable: "Production data is not connected. Configure the shared admin sync secret in Replit and Render, then deploy the Render API.",
   },
   ru: {
     title: "Административная панель",
@@ -82,6 +92,11 @@ const copy = {
     retry: "Повторить",
     signedInAs: "Вы вошли как",
     refreshing: "Обновление…",
+    development: "Разработка",
+    production: "Production",
+    dataSource: "Источник данных",
+    productionReadOnly: "Данные production доступны только для чтения. Изменение пользователей отключено.",
+    productionUnavailable: "Production не подключён. Настройте общий секрет синхронизации в Replit и Render, затем разверните API на Render.",
   },
 } satisfies Record<AdminLanguage, Record<string, string>>;
 
@@ -124,6 +139,7 @@ export default function AdminPanel() {
   const [authorized, setAuthorized] = useState(false);
   const [checkingAccess, setCheckingAccess] = useState(true);
   const [adminEmail, setAdminEmail] = useState("");
+  const [source, setSource] = useState<AdminSource>("development");
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [search, setSearch] = useState("");
@@ -131,8 +147,7 @@ export default function AdminPanel() {
   const [loadingStats, setLoadingStats] = useState(false);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [error, setError] = useState("");
-  const [refreshStatsVersion, setRefreshStatsVersion] = useState(0);
-  const [refreshUsersVersion, setRefreshUsersVersion] = useState(0);
+  const [refreshVersion, setRefreshVersion] = useState(0);
 
   useEffect(() => {
     if (document.querySelector("script[data-admin-tailwind]")) return;
@@ -169,43 +184,62 @@ export default function AdminPanel() {
   useEffect(() => {
     if (!authorized) return;
     let cancelled = false;
-    setLoadingStats(true);
-    setError("");
-    void adminFetch<AdminStats>("/api/admin/stats")
-      .then((data) => { if (!cancelled) setStats(data); })
-      .catch(() => { if (!cancelled) setError(text.loadError); })
-      .finally(() => { if (!cancelled) setLoadingStats(false); });
-    return () => { cancelled = true; };
-  }, [authorized, refreshStatsVersion, text.loadError]);
-
-  useEffect(() => {
-    if (!authorized) return;
-    let cancelled = false;
     const controller = new AbortController();
+    setLoadingStats(true);
     setLoadingUsers(true);
+    setStats(null);
+    setUsers([]);
+    setError("");
     const timer = window.setTimeout(() => {
-      const query = search.trim()
-        ? `?email=${encodeURIComponent(search.trim())}`
-        : "";
-      void adminFetch<{ users: AdminUser[] }>(`/api/admin/users${query}`, {
-        signal: controller.signal,
-      })
-        .then((data) => { if (!cancelled) setUsers(data.users); })
-        .catch((requestError: unknown) => {
-          if (!cancelled && !(requestError instanceof DOMException && requestError.name === "AbortError")) {
-            setError(text.loadError);
+      const query = search.trim() ? `?email=${encodeURIComponent(search.trim())}` : "";
+      const loadSnapshot = async () => {
+        try {
+          if (source === "production") {
+            const snapshot = await adminFetch<AdminSnapshot>(
+              `/api/admin/production-snapshot${query}`,
+              { signal: controller.signal },
+            );
+            if (!cancelled) {
+              setStats(snapshot.stats);
+              setUsers(snapshot.users);
+            }
+          } else {
+            const [statsResult, usersResult] = await Promise.all([
+              adminFetch<AdminStats>("/api/admin/stats", { signal: controller.signal }),
+              adminFetch<{ users: AdminUser[] }>(`/api/admin/users${query}`, {
+                signal: controller.signal,
+              }),
+            ]);
+            if (!cancelled) {
+              setStats(statsResult);
+              setUsers(usersResult.users);
+            }
           }
-        })
-        .finally(() => { if (!cancelled) setLoadingUsers(false); });
+        } catch (requestError) {
+          if (
+            !cancelled &&
+            !(requestError instanceof DOMException && requestError.name === "AbortError")
+          ) {
+            setError(source === "production" ? text.productionUnavailable : text.loadError);
+          }
+        } finally {
+          if (!cancelled) {
+            setLoadingStats(false);
+            setLoadingUsers(false);
+          }
+        }
+      };
+      void loadSnapshot();
     }, 250);
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [authorized, search, refreshUsersVersion, text.loadError]);
+  }, [authorized, source, search, refreshVersion, text.loadError, text.productionUnavailable]);
 
   const runUserAction = async (user: AdminUser, action: "toggle-whitelist" | "grant-premium") => {
+    if (source === "production") return;
     setPendingUserId(user.id);
     setError("");
     try {
@@ -221,7 +255,7 @@ export default function AdminPanel() {
         return;
       }
       if (action === "grant-premium") {
-        setRefreshStatsVersion((version) => version + 1);
+        setRefreshVersion((version) => version + 1);
       }
     } catch {
       setError(text.loadError);
@@ -272,10 +306,33 @@ export default function AdminPanel() {
           </div>
         </header>
 
+        <div className="mb-6 flex flex-wrap items-center gap-3">
+          <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm" aria-label={text.dataSource}>
+            {(["development", "production"] as const).map((option) => (
+              <button
+                key={option}
+                type="button"
+                aria-pressed={source === option}
+                onClick={() => setSource(option)}
+                className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
+                  source === option
+                    ? "bg-teal-700 text-white"
+                    : "text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                {text[option]}
+              </button>
+            ))}
+          </div>
+          {source === "production" && (
+            <p className="text-sm text-slate-500">{text.productionReadOnly}</p>
+          )}
+        </div>
+
         {error && (
           <div role="alert" className="mb-6 flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
             <span>{error}</span>
-            <button type="button" onClick={() => { setError(""); setRefreshStatsVersion((version) => version + 1); setRefreshUsersVersion((version) => version + 1); }} className="font-semibold underline">{text.retry}</button>
+            <button type="button" onClick={() => { setError(""); setRefreshVersion((version) => version + 1); }} className="font-semibold underline">{text.retry}</button>
           </div>
         )}
 
@@ -322,14 +379,14 @@ export default function AdminPanel() {
                   <th className="px-5 py-3 font-semibold">{text.premium}</th>
                   <th className="px-5 py-3 font-semibold">{text.whitelist}</th>
                   <th className="px-5 py-3 font-semibold">{text.freeLeft}</th>
-                  <th className="px-5 py-3 font-semibold">{text.actions}</th>
+                  {source === "development" && <th className="px-5 py-3 font-semibold">{text.actions}</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {loadingUsers && users.length === 0 ? (
-                  <tr><td colSpan={5} className="px-5 py-12 text-center text-slate-500">{text.loadingData}</td></tr>
+                  <tr><td colSpan={source === "production" ? 4 : 5} className="px-5 py-12 text-center text-slate-500">{text.loadingData}</td></tr>
                 ) : users.length === 0 ? (
-                  <tr><td colSpan={5} className="px-5 py-12 text-center text-slate-500">{text.noUsers}</td></tr>
+                  <tr><td colSpan={source === "production" ? 4 : 5} className="px-5 py-12 text-center text-slate-500">{text.noUsers}</td></tr>
                 ) : users.map((user) => {
                   const activePremium = user.isPremium && Boolean(user.premiumUntil && new Date(user.premiumUntil).getTime() > Date.now());
                   return (
@@ -350,7 +407,7 @@ export default function AdminPanel() {
                         </span>
                       </td>
                       <td className="px-5 py-4 font-medium text-slate-700">{user.freeGenerationsLeft}</td>
-                      <td className="px-5 py-4">
+                      {source === "development" && <td className="px-5 py-4">
                         <div className="flex items-center gap-2">
                           <button
                             type="button"
@@ -370,7 +427,7 @@ export default function AdminPanel() {
                             {activePremium ? text.extendPremium : text.grantPremium}
                           </button>
                         </div>
-                      </td>
+                      </td>}
                     </tr>
                   );
                 })}

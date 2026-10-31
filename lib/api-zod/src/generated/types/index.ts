@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './adminSnapshotResponse';
 export * from './adminStatsResponse';
 export * from './adminUser';
 export * from './adminUserResponse';
@@ -27,5 +28,7 @@ export * from './bpmnXmlGenerateResponse';
 export * from './documentUploadInput';
 export * from './documentUploadResponse';
 export * from './errorResponse';
+export * from './getAdminInternalSnapshotParams';
+export * from './getAdminProductionSnapshotParams';
 export * from './getAdminUsersParams';
 export * from './healthStatus';

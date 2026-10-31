@@ -370,7 +370,78 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /admin/production-snapshot:
+    get:
+      operationId: getAdminProductionSnapshot
+      tags: [admin]
+      summary: Read production dashboard data through the administrator API
+      parameters:
+        - in: query
+          name: email
+          required: false
+          schema:
+            type: string
+            maxLength: 255
+          description: Filter production users by email substring
+      responses:
+        "200":
+          description: Read-only production snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSnapshotResponse"
+        "401":
+          description: Authentication required
+        "403":
+          description: Whitelisted administrator access required
+        "502":
+          description: Production API could not provide a snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Production data connection is not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /admin/internal/snapshot:
+    get:
+      operationId: getAdminInternalSnapshot
+      tags: [admin]
+      summary: Read a production snapshot for a trusted server
+      security:
+        - AdminSyncToken: []
+      parameters:
+        - in: query
+          name: email
+          required: false
+          schema:
+            type: string
+            maxLength: 255
+          description: Filter users by email substring
+      responses:
+        "200":
+          description: Production dashboard snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSnapshotResponse"
+        "401":
+          description: Invalid server-to-server token
+        "503":
+          description: Server-to-server token is not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 components:
+  securitySchemes:
+    AdminSyncToken:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque token
   schemas:
     HealthStatus:
       type: object
@@ -528,6 +599,16 @@ components:
           type: integer
           minimum: 0
       required: [totalUsers, activePremiumSubscriptions, totalGenerations]
+    AdminSnapshotResponse:
+      type: object
+      properties:
+        stats:
+          $ref: "#/components/schemas/AdminStatsResponse"
+        users:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminUser"
+      required: [stats, users]
     AdminUser:
       type: object
       properties:

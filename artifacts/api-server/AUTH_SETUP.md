@@ -22,6 +22,12 @@ Optional configuration:
   `CORS_ORIGIN`, when the frontend is hosted separately.
 - `SESSION_COOKIE_SAME_SITE=none` — use only for a cross-site frontend/API
   deployment; HTTPS is required.
+- `PRODUCTION_API_URL` — API origin used by the Replit admin panel to read the
+  separate production database. Defaults to the Render API used by the Vercel
+  frontend.
+- `ADMIN_SYNC_TOKEN` — a long random bearer token shared only between Replit
+  Secrets and the Render API environment. It protects the production
+  read-only snapshot endpoint; never put it in frontend configuration.
 
 The default callback URI is:
 
@@ -38,6 +44,10 @@ does not accept process text or run test generations.
 - `GET /api/auth/me` — returns the authenticated user and quota, or
   `{ "authenticated": false }`.
 - `POST /api/auth/logout` — destroys the session.
+- `GET /api/admin/production-snapshot` — whitelisted administrators can read a
+  read-only snapshot from the production API.
+- `GET /api/admin/internal/snapshot` — production API endpoint protected by
+  `ADMIN_SYNC_TOKEN`; intended only for the Replit server-to-server proxy.
 - `POST /api/bpmn/generate` — accepts `{ "textPrompt": "..." }` and returns
   raw BPMN 2.0 XML from OpenRouter.
 - Existing AI-backed routes (`/api/generate`, `/api/upload-document`,

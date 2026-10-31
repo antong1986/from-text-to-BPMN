@@ -1,2 +1,3 @@
 - [Verify installed dependencies](dependency-audit-verification.md) — after workspace overrides, confirm resolved installs as well as the lockfile audit.
 - [OpenRouter model selection](openrouter-model-selection.md) — keep BPMN generation pinned to the user's chosen paid Gemini Flash model.
+- [Production hosting](production-hosting.md) — the user identifies the Vercel site as live production; keep its data distinct from Replit preview.

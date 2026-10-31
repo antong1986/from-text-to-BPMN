@@ -16,3 +16,5 @@ services:
         value: gemini-3.6-flash
       - key: AI_API_KEY
         sync: false
+      - key: ADMIN_SYNC_TOKEN
+        sync: false
