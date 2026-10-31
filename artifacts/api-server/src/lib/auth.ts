@@ -8,6 +8,7 @@ import type { AppUser } from "../types/app-user";
 import { isDeveloperEmail } from "./developer-email";
 import { getSafeReturnTo } from "./auth-redirect";
 import { logger } from "./logger";
+import { getGoogleCallbackUrl } from "./oauth-config";
 
 export { getSafeReturnTo } from "./auth-redirect";
 
@@ -21,21 +22,6 @@ if (isProduction && !sessionSecret) {
 
 const sessionCookieSameSite =
   process.env.SESSION_COOKIE_SAME_SITE === "none" ? "none" : "lax";
-
-function getGoogleCallbackUrl(): string {
-  if (process.env.GOOGLE_CALLBACK_URL) return process.env.GOOGLE_CALLBACK_URL;
-
-  const configuredDomain =
-    process.env.REPLIT_DOMAINS?.split(",")[0]?.trim() ||
-    process.env.REPLIT_DEV_DOMAIN?.trim();
-  const origin = configuredDomain
-    ? configuredDomain.startsWith("http")
-      ? configuredDomain
-      : `https://${configuredDomain}`
-    : `http://localhost:${process.env.PORT || "8080"}`;
-
-  return new URL("/api/auth/google/callback", origin).toString();
-}
 
 function mapUser(row: Record<string, unknown>): AppUser {
   return {
@@ -91,6 +77,7 @@ if (isGoogleOAuthConfigured) {
         clientID: googleClientId!,
         clientSecret: googleClientSecret!,
         callbackURL: getGoogleCallbackUrl(),
+        proxy: true,
         state: true,
       },
       async (_accessToken, _refreshToken, profile, done) => {
@@ -123,7 +110,6 @@ passport.deserializeUser(async (id: number, done) => {
 });
 
 export function configureAuth(app: Express): void {
-  app.set("trust proxy", 1);
   app.use(
     session({
       store: new PgSessionStore({

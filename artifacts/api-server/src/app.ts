@@ -6,6 +6,7 @@ import { logger } from "./lib/logger";
 import { configureAuth } from "./lib/auth";
 
 const app: Express = express();
+app.set("trust proxy", true);
 
 app.use(
   pinoHttp({
