@@ -1,5 +1,6 @@
-import app from "./app";
+import { pool } from "@workspace/db";
 import { logger } from "./lib/logger";
+import { ensureSessionStoreTable } from "./lib/session-store";
 
 const rawPort = process.env["PORT"];
 
@@ -15,11 +16,25 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-app.listen(port, (err) => {
-  if (err) {
-    logger.error({ err }, "Error listening on port");
+async function startServer(): Promise<void> {
+  try {
+    await ensureSessionStoreTable((sql) => pool.query(sql));
+
+    const { default: app } = await import("./app");
+    const server = app.listen(port, () => {
+      logger.info({ port }, "Server listening");
+    });
+    server.on("error", (err) => {
+      logger.error({ err }, "Error listening on port");
+      process.exit(1);
+    });
+  } catch (err) {
+    logger.error(
+      { err },
+      "Failed to initialize PostgreSQL session table; server will not start",
+    );
     process.exit(1);
   }
+}
 
-  logger.info({ port }, "Server listening");
-});
+void startServer();
