@@ -12,6 +12,8 @@ tags:
     description: Health operations
   - name: text-to-bpmn
     description: Generate BPMN process graphs and implementation specifications
+  - name: admin
+    description: Whitelisted administrator dashboard and user management
 paths:
   /healthz:
     get:
@@ -250,6 +252,124 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /admin/stats:
+    get:
+      operationId: getAdminStats
+      tags: [admin]
+      summary: Get administrator dashboard statistics
+      responses:
+        "200":
+          description: Dashboard statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminStatsResponse"
+        "401":
+          description: Authentication required
+        "403":
+          description: Whitelisted administrator access required
+        "500":
+          description: Statistics could not be loaded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /admin/users:
+    get:
+      operationId: getAdminUsers
+      tags: [admin]
+      summary: List users for administrators
+      parameters:
+        - in: query
+          name: email
+          required: false
+          schema:
+            type: string
+            maxLength: 255
+          description: Filter users by email substring
+      responses:
+        "200":
+          description: User list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUsersResponse"
+        "401":
+          description: Authentication required
+        "403":
+          description: Whitelisted administrator access required
+        "500":
+          description: Users could not be loaded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /admin/users/{id}/toggle-whitelist:
+    post:
+      operationId: toggleAdminUserWhitelist
+      tags: [admin]
+      summary: Toggle a user's whitelist status
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUserResponse"
+        "400":
+          description: Invalid user ID
+        "401":
+          description: Authentication required
+        "403":
+          description: Whitelisted administrator access required
+        "404":
+          description: User not found
+        "500":
+          description: User could not be updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /admin/users/{id}/grant-premium:
+    post:
+      operationId: grantAdminUserPremium
+      tags: [admin]
+      summary: Grant or extend a 30-day premium subscription
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUserResponse"
+        "400":
+          description: Invalid user ID
+        "401":
+          description: Authentication required
+        "403":
+          description: Whitelisted administrator access required
+        "404":
+          description: User not found
+        "500":
+          description: User could not be updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 components:
   schemas:
     HealthStatus:
@@ -395,6 +515,53 @@ components:
         spec:
           type: string
       required: [spec]
+    AdminStatsResponse:
+      type: object
+      properties:
+        totalUsers:
+          type: integer
+          minimum: 0
+        activePremiumSubscriptions:
+          type: integer
+          minimum: 0
+        totalGenerations:
+          type: integer
+          minimum: 0
+      required: [totalUsers, activePremiumSubscriptions, totalGenerations]
+    AdminUser:
+      type: object
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+          format: email
+        isPremium:
+          type: boolean
+        premiumUntil:
+          type: string
+          format: date-time
+          nullable: true
+        isWhitelisted:
+          type: boolean
+        freeGenerationsLeft:
+          type: integer
+          minimum: 0
+      required: [id, email, isPremium, premiumUntil, isWhitelisted, freeGenerationsLeft]
+    AdminUsersResponse:
+      type: object
+      properties:
+        users:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminUser"
+      required: [users]
+    AdminUserResponse:
+      type: object
+      properties:
+        user:
+          $ref: "#/components/schemas/AdminUser"
+      required: [user]
     ErrorResponse:
       type: object
       properties:

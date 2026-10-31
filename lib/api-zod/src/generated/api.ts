@@ -173,3 +173,100 @@ export const GenerateSpecResponse = zod.object({
 })
 
 
+/**
+ * @summary Get administrator dashboard statistics
+ */
+export const getAdminStatsResponseTotalUsersMin = 0;
+
+export const getAdminStatsResponseActivePremiumSubscriptionsMin = 0;
+
+export const getAdminStatsResponseTotalGenerationsMin = 0;
+
+
+
+export const GetAdminStatsResponse = zod.object({
+  "totalUsers": zod.number().int().min(getAdminStatsResponseTotalUsersMin),
+  "activePremiumSubscriptions": zod.number().int().min(getAdminStatsResponseActivePremiumSubscriptionsMin),
+  "totalGenerations": zod.number().int().min(getAdminStatsResponseTotalGenerationsMin)
+})
+
+
+/**
+ * @summary List users for administrators
+ */
+export const getAdminUsersQueryEmailMax = 255;
+
+
+
+export const GetAdminUsersQueryParams = zod.object({
+  "email": zod.coerce.string().max(getAdminUsersQueryEmailMax).optional().describe('Filter users by email substring')
+})
+
+export const getAdminUsersResponseUsersItemFreeGenerationsLeftMin = 0;
+
+
+
+export const GetAdminUsersResponse = zod.object({
+  "users": zod.array(zod.object({
+  "id": zod.number().int(),
+  "email": zod.string().email(),
+  "isPremium": zod.boolean(),
+  "premiumUntil": zod.coerce.date().nullable(),
+  "isWhitelisted": zod.boolean(),
+  "freeGenerationsLeft": zod.number().int().min(getAdminUsersResponseUsersItemFreeGenerationsLeftMin)
+}))
+})
+
+
+/**
+ * @summary Toggle a user's whitelist status
+ */
+
+
+
+export const ToggleAdminUserWhitelistParams = zod.object({
+  "id": zod.coerce.number().int().min(1)
+})
+
+export const toggleAdminUserWhitelistResponseUserFreeGenerationsLeftMin = 0;
+
+
+
+export const ToggleAdminUserWhitelistResponse = zod.object({
+  "user": zod.object({
+  "id": zod.number().int(),
+  "email": zod.string().email(),
+  "isPremium": zod.boolean(),
+  "premiumUntil": zod.coerce.date().nullable(),
+  "isWhitelisted": zod.boolean(),
+  "freeGenerationsLeft": zod.number().int().min(toggleAdminUserWhitelistResponseUserFreeGenerationsLeftMin)
+})
+})
+
+
+/**
+ * @summary Grant or extend a 30-day premium subscription
+ */
+
+
+
+export const GrantAdminUserPremiumParams = zod.object({
+  "id": zod.coerce.number().int().min(1)
+})
+
+export const grantAdminUserPremiumResponseUserFreeGenerationsLeftMin = 0;
+
+
+
+export const GrantAdminUserPremiumResponse = zod.object({
+  "user": zod.object({
+  "id": zod.number().int(),
+  "email": zod.string().email(),
+  "isPremium": zod.boolean(),
+  "premiumUntil": zod.coerce.date().nullable(),
+  "isWhitelisted": zod.boolean(),
+  "freeGenerationsLeft": zod.number().int().min(grantAdminUserPremiumResponseUserFreeGenerationsLeftMin)
+})
+})
+
+

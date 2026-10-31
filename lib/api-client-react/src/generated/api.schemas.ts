@@ -104,7 +104,42 @@ export interface BpmnSpecResponse {
   spec: string;
 }
 
+export interface AdminStatsResponse {
+  /** @minimum 0 */
+  totalUsers: number;
+  /** @minimum 0 */
+  activePremiumSubscriptions: number;
+  /** @minimum 0 */
+  totalGenerations: number;
+}
+
+export interface AdminUser {
+  id: number;
+  email: string;
+  isPremium: boolean;
+  premiumUntil: string | null;
+  isWhitelisted: boolean;
+  /** @minimum 0 */
+  freeGenerationsLeft: number;
+}
+
+export interface AdminUsersResponse {
+  users: AdminUser[];
+}
+
+export interface AdminUserResponse {
+  user: AdminUser;
+}
+
 export interface ErrorResponse {
   error: string;
 }
+
+export type GetAdminUsersParams = {
+/**
+ * Filter users by email substring
+ * @maxLength 255
+ */
+email?: string;
+};
 

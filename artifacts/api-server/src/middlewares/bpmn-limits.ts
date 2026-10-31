@@ -8,6 +8,13 @@ const PAYMENT_REQUIRED_MESSAGE =
 const PREMIUM_FAIR_USE_LIMIT_MESSAGE =
   "Генерации временно ограничены правилами использования подписки. Попробуйте позже.";
 const PREMIUM_WINDOW_SQL = "INTERVAL '30 days'";
+const TOTAL_GENERATIONS_INCREMENT_SQL = `
+  CASE
+    WHEN total_generations = 0 THEN
+      GREATEST(0, 3 - free_generations_left) +
+      GREATEST(0, premium_generations_used) + 1
+    ELSE total_generations + 1
+  END`;
 
 export const checkBPMNLimits: RequestHandler = async (req, res, next) => {
   if (!req.isAuthenticated?.() || !req.user) {
@@ -73,7 +80,8 @@ export async function consumeBPMNGeneration(req: Express.Request): Promise<boole
   if (req.bpmnLimitMode === "premium") {
     const result = await pool.query(
       `UPDATE users
-       SET premium_window_started_at = CASE
+       SET total_generations = ${TOTAL_GENERATIONS_INCREMENT_SQL},
+           premium_window_started_at = CASE
              WHEN premium_window_started_at IS NULL
                OR premium_window_started_at <= NOW() - ${PREMIUM_WINDOW_SQL}
              THEN NOW()
@@ -97,13 +105,25 @@ export async function consumeBPMNGeneration(req: Express.Request): Promise<boole
     return Boolean(result.rows[0]);
   }
 
+  if (req.bpmnLimitMode === "whitelisted") {
+    const result = await pool.query(
+      `UPDATE users
+       SET total_generations = ${TOTAL_GENERATIONS_INCREMENT_SQL}
+       WHERE id = $1
+       RETURNING total_generations`,
+      [user.id],
+    );
+    return Boolean(result.rows[0]);
+  }
+
   if (req.bpmnLimitMode !== "free") return true;
 
   const result = await pool.query(
     `UPDATE users
-     SET free_generations_left = free_generations_left - 1
+     SET total_generations = ${TOTAL_GENERATIONS_INCREMENT_SQL},
+         free_generations_left = free_generations_left - 1
      WHERE id = $1 AND free_generations_left > 0
-     RETURNING free_generations_left`,
+     RETURNING free_generations_left, total_generations`,
     [user.id],
   );
 

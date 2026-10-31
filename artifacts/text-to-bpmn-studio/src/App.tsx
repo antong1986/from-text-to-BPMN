@@ -3,6 +3,7 @@ import { Check, Network, Paperclip, Send, Undo2 } from 'lucide-react';
 import { useRefineBpmn, useUploadDocument, type BpmnGraph } from '@workspace/api-client-react';
 import BPMNViewer from './components/BPMNViewer';
 import SpecExportButton from './components/SpecExportButton';
+import AdminPanel from './components/AdminPanel';
 import {
   appendGraphBelowXml,
   extractBpmnXmlModel,
@@ -72,7 +73,7 @@ function saveDescriptionDraft(value: string): void {
   }
 }
 
-export default function App(){
+function StudioApp(){
   const [language,setLanguage]=useState<Language>(getInitialLanguage);
   const copy=getUiText(language);
   const [userInput,setUserInput]=useState(readDescriptionDraft);
@@ -408,4 +409,10 @@ export default function App(){
       </div>
     </div>}
   </div>;
+}
+
+export default function App(){
+  const isAdminRoute = typeof window !== 'undefined' &&
+    window.location.pathname.replace(/\/+$/, '').endsWith('/admin-panel');
+  return isAdminRoute ? <AdminPanel/> : <StudioApp/>;
 }

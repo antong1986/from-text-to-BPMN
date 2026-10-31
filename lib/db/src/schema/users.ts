@@ -22,6 +22,7 @@ export const usersTable = pgTable("users", {
     withTimezone: true,
     mode: "date",
   }),
+  totalGenerations: integer("total_generations").notNull().default(0),
   isWhitelisted: boolean("is_whitelisted").notNull().default(false),
 });
 
