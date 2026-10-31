@@ -1,5 +1,6 @@
 import type { BpmnEdge, BpmnGraph, BpmnNode } from '@workspace/api-client-react';
 import { BRANCH_ROW_HEIGHT, LOOP_CLEARANCE, LOOP_LANE_GAP, routeFlow, type NodeBounds } from './bpmnRouting.ts';
+import type { Language } from '../i18n';
 
 const BPMN_NS = 'http://www.omg.org/spec/BPMN/20100524/MODEL';
 const BPMNDI_NS = 'http://www.omg.org/spec/BPMN/20100524/DI';
@@ -27,6 +28,10 @@ const graphTypeByBpmnElement: Record<string,BpmnNode['type']> = {
   intermediateThrowEvent:'serviceTask',
   intermediateCatchEvent:'serviceTask',
 };
+const fallbackNodeNames:Record<Language,Record<BpmnNode['type'],string>>={
+  en:{start:'Start',end:'End',userTask:'User task',serviceTask:'Service task',gateway:'Gateway'},
+  ru:{start:'Начало',end:'Завершение',userTask:'Действие пользователя',serviceTask:'Автоматическое действие',gateway:'Условие'},
+};
 const escape = (value: string) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 function validate(graph: BpmnGraph): void {
@@ -39,6 +44,7 @@ function validate(graph: BpmnGraph): void {
 export function generateBpmnXmlFromJson(
   graph: BpmnGraph,
   layoutOverrides?: ReadonlyMap<string,NodeBounds>,
+  language: Language = 'en',
 ): string {
   validate(graph);
   const nodes = graph.nodes;
@@ -112,7 +118,7 @@ export function generateBpmnXmlFromJson(
       ...(incoming.get(n.id) ?? []).map(x => `<bpmn:incoming>${x}</bpmn:incoming>`),
       ...(outgoing.get(n.id) ?? []).map(x => `<bpmn:outgoing>${x}</bpmn:outgoing>`),
     ];
-    return `<bpmn:${tag} id="${id}" name="${escape(n.name || (n.type === 'start' ? 'Начало' : n.type === 'end' ? 'Завершение' : n.type === 'gateway' ? 'Условие' : 'Действие'))}">${inner.join('')}</bpmn:${tag}>`;
+    return `<bpmn:${tag} id="${id}" name="${escape(n.name || fallbackNodeNames[language][n.type])}">${inner.join('')}</bpmn:${tag}>`;
   }).join('\n');
   const flows = graph.edges.map((e,i) => `<bpmn:sequenceFlow id="${edgeIds[i]}"${e.condition ? ` name="${escape(e.condition)}"` : ''} sourceRef="${byId.get(e.from)}" targetRef="${byId.get(e.to)}" />`).join('\n');
   return `<?xml version="1.0" encoding="UTF-8"?>

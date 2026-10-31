@@ -13,6 +13,7 @@ import {
 import { MINIMAL_BPMN_XML } from './utils/mockBpmn';
 import { generateSqlSchema } from './utils/generateSqlSchema';
 import { parseGeneratedGraph } from './utils/parseGeneratedGraph';
+import { getInitialLanguage, getUiText, localizeKnownError, type Language } from './i18n';
 
 type ChatMessage={sender:'ai'|'user';text:string;canRollback?:boolean};
 type DiagramSnapshot={
@@ -32,39 +33,21 @@ type AuthStatus={
     isWhitelisted:boolean;
   };
 };
-const GENERATION_ERROR_MESSAGE = 'Не удалось построить диаграмму: модель перегружена. Попробуйте повторить запрос позже.';
-const QUESTIONS=[
-  'Я построил базовый процесс. Что должно произойти, если на этапе «{{task}}» возникнет ошибка или отказ: завершить процесс или отправить уведомление клиенту?',
-  'Схема готова. Требуется ли на шаге «{{task}}» дополнительная проверка данных перед переходом к следующему этапу?',
-  'Логика процесса понятна. Нужно ли автоматически уведомлять ответственных лиц после выполнения шага «{{task}}»?',
-];
-
-function refinementErrorMessage(error: unknown): string {
-  if (error && typeof error === 'object' && 'data' in error) {
-    const data = (error as {data?:unknown}).data;
-    if (data && typeof data === 'object' && 'error' in data &&
-      typeof data.error === 'string' && data.error.trim()) return data.error;
-  }
-  return 'Не удалось обновить диаграмму. Исходная схема сохранена — попробуйте уточнить ответ ещё раз.';
-}
-
-function documentErrorMessage(error: unknown): string {
-  if (error && typeof error === 'object' && 'data' in error) {
-    const data = (error as {data?:unknown}).data;
-    if (data && typeof data === 'object' && 'error' in data &&
-      typeof data.error === 'string' && data.error.trim()) return data.error;
-  }
-  return 'Не удалось импортировать документ. Проверьте формат файла и попробуйте ещё раз.';
-}
-
-function apiErrorMessage(error: unknown, fallback: string): string {
+function getErrorText(error: unknown): string | null {
   if (error && typeof error === 'object' && 'data' in error) {
     const data = (error as {data?:unknown}).data;
     if (data && typeof data === 'object' && 'error' in data &&
       typeof data.error === 'string' && data.error.trim()) return data.error;
   }
   if (error instanceof Error && error.message.trim()) return error.message;
-  return fallback;
+  return null;
+}
+
+function refinementErrorMessage(error: unknown, language: Language): string {
+  const message = getErrorText(error);
+  return message
+    ? localizeKnownError(message, language)
+    : getUiText(language).refinementErrorFallback;
 }
 
 const DESCRIPTION_DRAFT_KEY = 'text-to-bpmn-description-draft';
@@ -90,6 +73,8 @@ function saveDescriptionDraft(value: string): void {
 }
 
 export default function App(){
+  const [language,setLanguage]=useState<Language>(getInitialLanguage);
+  const copy=getUiText(language);
   const [userInput,setUserInput]=useState(readDescriptionDraft);
   const [currentXml,setCurrentXml]=useState(MINIMAL_BPMN_XML);
   const [diagramImportVersion,setDiagramImportVersion]=useState(0);
@@ -152,6 +137,17 @@ export default function App(){
   useEffect(()=>{messageEnd.current?.scrollIntoView({behavior:'smooth'});},[chatMessages]);
   useEffect(()=>{void refreshAuth();},[refreshAuth]);
   useEffect(()=>{saveDescriptionDraft(userInput);},[userInput]);
+  useEffect(()=>{
+    document.documentElement.lang=language;
+    document.title=copy.pageTitle;
+    document.querySelector('meta[name="description"]')?.setAttribute('content',copy.pageDescription);
+    document.querySelector('meta[property="og:description"]')?.setAttribute('content',copy.pageDescription);
+    document.querySelector('meta[name="twitter:description"]')?.setAttribute('content',copy.pageDescription);
+    try{window.localStorage.setItem('text-to-bpmn-language',language);}catch{/* Storage may be unavailable. */}
+  },[language,copy]);
+  useEffect(()=>{
+    setSqlSchema(current=>current===null?null:generateSqlSchema(currentXml,language));
+  },[language]);
   useEffect(()=>()=>{replyRequestId.current+=1;uploadRequestId.current+=1;},[]);
   useEffect(()=>{
     if(!isResizing)return;
@@ -166,10 +162,10 @@ export default function App(){
     const generatedGraph=parseGeneratedGraph(response);
     const appended=hasGenerated?appendGraphBelowXml(currentXmlRef.current,generatedGraph):null;
     const combined=appended?.graph??generatedGraph;
-    const xml=appended?.xml??generatedXml??generateBpmnXmlFromJson(generatedGraph);
+    const xml=appended?.xml??generatedXml??generateBpmnXmlFromJson(generatedGraph,undefined,language);
     setUserInput(description);setGraph(combined);replaceDiagramXml(xml);setHasGenerated(true);
-    const task=generatedGraph.nodes.find(n=>n.type==='userTask'||n.type==='serviceTask')?.name||'этого этапа';
-    const question=QUESTIONS[Math.floor(Math.random()*QUESTIONS.length)].replace('{{task}}',task);
+    const task=generatedGraph.nodes.find(n=>n.type==='userTask'||n.type==='serviceTask')?.name||copy.fallbackTaskName;
+    const question=copy.questions[Math.floor(Math.random()*copy.questions.length)].replace('{{task}}',task);
     setChatMessages([{sender:'ai',text:question}]);setChatInput('');setIsValidated(false);
     setIsScenarioFinished(false);setSqlSchema(null);
   };
@@ -196,7 +192,7 @@ export default function App(){
       applyGeneratedResult({graph:generatedGraph},description,generatedXml);
       await refreshAuth();
     }catch(error){
-      setAiError(apiErrorMessage(error,GENERATION_ERROR_MESSAGE));
+      setAiError(getErrorText(error)??copy.generationError);
     }finally{
       setIsGenerating(false);
     }
@@ -215,7 +211,7 @@ export default function App(){
       await refreshAuth();
     }catch(error){
       if(requestId!==uploadRequestId.current)return;
-      setAiError(documentErrorMessage(error));
+      setAiError(getErrorText(error)??copy.documentErrorFallback);
     }finally{
       if(requestId===uploadRequestId.current)setIsDocumentUploading(false);
     }
@@ -245,7 +241,7 @@ export default function App(){
         graph:baselineGraph,
       }});
       if(requestId!==replyRequestId.current)return;
-      const updatedGraph=parseGeneratedGraph(result.graph);
+       const updatedGraph=parseGeneratedGraph(result.graph);
       const mergedGraph=mergeRefinementGraphs(baselineGraph,updatedGraph);
       const updatedXml=mergeRefinementXml(baselineXml,baselineModel,updatedGraph);
       setGraph(mergedGraph);replaceDiagramXml(updatedXml);
@@ -254,7 +250,7 @@ export default function App(){
       await refreshAuth();
     }catch(error){
       if(requestId!==replyRequestId.current)return;
-      setChatMessages(v=>[...v,{sender:'ai',text:refinementErrorMessage(error),canRollback:true}]);
+      setChatMessages(v=>[...v,{sender:'ai',text:refinementErrorMessage(error,language),canRollback:true}]);
     }finally{
       if(requestId===replyRequestId.current)setIsReplyPending(false);
     }
@@ -279,7 +275,7 @@ export default function App(){
   };
   const handleFinish=()=>{
     replyRequestId.current+=1;
-    setIsReplyPending(false);setChatMessages(v=>[...v,{sender:'ai',text:'Процесс завершен пользователем'}]);setIsValidated(true);setIsScenarioFinished(true);
+    setIsReplyPending(false);setChatMessages(v=>[...v,{sender:'ai',text:copy.finishedByUser}]);setIsValidated(true);setIsScenarioFinished(true);
   };
   const handleClearCanvas=()=>{
     uploadRequestId.current+=1;
@@ -302,84 +298,90 @@ export default function App(){
   return <div className="studio">
     <aside className="control-rail" style={{width:asideWidth,flexBasis:asideWidth}} data-testid="panel-controls">
       <header className="brand">
-        <div className="brand-mark" aria-hidden="true">tb</div>
-        <div><div className="brand-title">Text-to-BPMN</div><div className="brand-caption">Студия моделирования процессов</div></div>
+        <div className="brand-identity">
+          <div className="brand-mark" aria-hidden="true">tb</div>
+          <div className="brand-copy"><div className="brand-title">Text-to-BPMN</div><div className="brand-caption">{copy.brandCaption}</div></div>
+        </div>
+        <div className="language-switch" role="group" aria-label={copy.languageSwitcher} data-testid="language-switch">
+          <button type="button" className={language==='en'?'active':''} aria-pressed={language==='en'} aria-label={copy.switchToEnglish} onClick={()=>setLanguage('en')} data-testid="button-language-en">Eng</button>
+          <button type="button" className={language==='ru'?'active':''} aria-pressed={language==='ru'} aria-label={copy.switchToRussian} onClick={()=>setLanguage('ru')} data-testid="button-language-ru">Рус</button>
+        </div>
       </header>
       <section>
-        <div className="eyebrow" style={{marginBottom:5}}>ШАГ 01 · ОПИСАНИЕ</div>
+        <div className="eyebrow" style={{marginBottom:5}}>{copy.descriptionStep}</div>
         <div className="description-head">
-          <div className="section-title">Опишите бизнес-процесс</div>
-          <button type="button" className="text-action" onClick={handleClearText} disabled={!hasTextToClear} title={hasTextToClear?'Очистить описание, чат и сообщение об ошибке':'Очищать пока нечего: все текстовые поля уже пусты'} data-testid="button-clear-text">Очистить текст</button>
+          <div className="section-title">{copy.describeProcess}</div>
+          <button type="button" className="text-action" onClick={handleClearText} disabled={!hasTextToClear} title={hasTextToClear?copy.clearTextTitle:copy.nothingToClearTitle} data-testid="button-clear-text">{copy.clearText}</button>
         </div>
         <div className="description-import-row">
           <button type="button" className="import-btn" onClick={()=>documentInput.current?.click()} disabled={busy||isDocumentUploading||authStatus?.authenticated===false} data-testid="button-import-document">
             {isDocumentUploading?<span className="spin import-spinner" aria-hidden="true"/>:<Paperclip size={13}/>}
-            {isDocumentUploading?'Обрабатываю документ…':'Импорт документа'}
+            {isDocumentUploading?copy.processingDocument:copy.importDocument}
           </button>
-          <span className="import-note">DOCX, TXT · до 5 МБ</span>
-          <input ref={documentInput} type="file" accept=".docx,.txt,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" hidden aria-label="Выбрать DOCX или TXT файл" data-testid="input-import-document" onChange={event=>{
+          <span className="import-note">{copy.importNote}</span>
+          <input ref={documentInput} type="file" accept=".docx,.txt,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" hidden aria-label={copy.chooseDocument} data-testid="input-import-document" onChange={event=>{
             const file=event.target.files?.[0];
             if(file)void handleDocumentSelected(file);
             event.target.value='';
           }}/>
         </div>
         <div className={`description-wrap${busy?' is-generating':''}`} aria-busy={busy} data-testid="description-loading-state">
-          <textarea className={`description${busy?' is-blurred':''}`} value={userInput} onChange={e=>setUserInput(e.target.value)} placeholder="Например: Клиент отправляет заявку, менеджер проверяет её и, если всё корректно, передаёт в отдел исполнения…" disabled={isDocumentUploading||busy} data-testid="input-process-description" aria-label="Описание процесса"/>
-          {busy&&<span className="description-loader" role="status" aria-label="ИИ проектирует процесс">
+          <textarea className={`description${busy?' is-blurred':''}`} value={userInput} onChange={e=>setUserInput(e.target.value)} placeholder={copy.descriptionPlaceholder} disabled={isDocumentUploading||busy} data-testid="input-process-description" aria-label={copy.descriptionAria}/>
+          {busy&&<span className="description-loader" role="status" aria-label={copy.designingAria}>
             <span className="spin description-spinner" aria-hidden="true"/>
           </span>}
         </div>
         <div
           className={`generate-button-wrap${needsGoogleLoginForGenerate?' auth-required':''}`}
           tabIndex={needsGoogleLoginForGenerate?0:undefined}
-          aria-label={needsGoogleLoginForGenerate?'Войдите через Google, чтобы сгенерировать диаграмму':undefined}
+          aria-label={needsGoogleLoginForGenerate?copy.loginToGenerateAria:undefined}
           aria-describedby={needsGoogleLoginForGenerate?'generate-login-tooltip':undefined}
           data-testid="generate-button-tooltip"
         >
           <button type="button" className="primary-btn" style={{width:'100%'}} onClick={()=>void handleGenerate()} disabled={busy||isDocumentUploading||!userInput.trim()||authStatus?.authenticated===false} data-testid="button-generate-bpmn">
-            {isDocumentUploading?'Импортирую документ…':busy?'ИИ проектирует процесс…':'Сгенерировать диаграмму'}
+            {isDocumentUploading?copy.importingDocument:busy?copy.designingProcess:copy.generateDiagram}
           </button>
-          {needsGoogleLoginForGenerate&&<span className="generate-tooltip" id="generate-login-tooltip" role="tooltip">Войдите через Google</span>}
+          {needsGoogleLoginForGenerate&&<span className="generate-tooltip" id="generate-login-tooltip" role="tooltip">{copy.loginWithGoogle}</span>}
         </div>
-        {busy&&<p className="generation-progress" role="status">Модель строит диаграмму. Пожалуйста, не закрывайте страницу.</p>}
-        {isDocumentUploading&&<p className="generation-progress" role="status" data-testid="status-document-upload">Извлекаю текст и строю диаграмму…</p>}
-        {aiError&&<div className="error-box" role="alert" data-testid="status-generation-error">{aiError}</div>}
+        {busy&&<p className="generation-progress" role="status">{copy.modelBuildingProgress}</p>}
+        {isDocumentUploading&&<p className="generation-progress" role="status" data-testid="status-document-upload">{copy.documentBuildingProgress}</p>}
+        {aiError&&<div className="error-box" role="alert" data-testid="status-generation-error">{localizeKnownError(aiError,language)}</div>}
       </section>
 
-      <section className="chat-box" aria-label="Чат-валидатор">
+      <section className="chat-box" aria-label={copy.validatorTitle}>
         <div className="chat-head">
-          <div className="chat-status"><span className={`status-dot ${hasAiMessage?'active':''}`}/><span>Чат-валидатор</span></div>
-          <button type="button" className="finish-btn" onClick={handleFinish} disabled={isScenarioFinished||chatMessages.length===0||isDocumentUploading} title="Сценарий может быть завершен с ошибками" data-testid="button-finish-scenario">Завершить сценарий</button>
+          <div className="chat-status"><span className={`status-dot ${hasAiMessage?'active':''}`}/><span>{copy.validatorTitle}</span></div>
+          <button type="button" className="finish-btn" onClick={handleFinish} disabled={isScenarioFinished||chatMessages.length===0||isDocumentUploading} title={copy.finishScenarioTitle} data-testid="button-finish-scenario">{copy.finishScenario}</button>
         </div>
         <div className="messages" data-testid="list-validator-messages">
-          {chatMessages.length===0?<p className="chat-empty" data-testid="empty-validator">Здесь появятся замечания и вопросы<br/>по сгенерированной схеме</p>:chatMessages.map((m,i)=><div key={i} className={`message-row ${m.sender}${m.canRollback?' has-rollback':''}`}><div className={`message ${m.sender}`} data-testid={`message-validator-${i}`}>{m.text}</div>{m.canRollback&&i===chatMessages.length-1&&rollbackSnapshot&&<button type="button" className="rollback-btn" onClick={handleRollback} data-testid="button-rollback-validator-step"><Undo2 size={12}/>Вернуться назад</button>}</div>)}
-          {isReplyPending&&<p className="generation-progress" role="status" data-testid="status-refining-diagram">Обновляю диаграмму по вашему уточнению…</p>}
+          {chatMessages.length===0?<p className="chat-empty" data-testid="empty-validator">{copy.chatEmptyFirstLine}<br/>{copy.chatEmptySecondLine}</p>:chatMessages.map((m,i)=><div key={i} className={`message-row ${m.sender}${m.canRollback?' has-rollback':''}`}><div className={`message ${m.sender}`} data-testid={`message-validator-${i}`}>{m.text}</div>{m.canRollback&&i===chatMessages.length-1&&rollbackSnapshot&&<button type="button" className="rollback-btn" onClick={handleRollback} data-testid="button-rollback-validator-step"><Undo2 size={12}/>{copy.rollback}</button>}</div>)}
+          {isReplyPending&&<p className="generation-progress" role="status" data-testid="status-refining-diagram">{copy.refiningDiagram}</p>}
           <div ref={messageEnd}/>
         </div>
         <div className="chat-compose">
-          <input className="chat-input" value={chatInput} onChange={e=>setChatInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')handleReply();}} disabled={!hasAiMessage||isReplyPending||isDocumentUploading} placeholder="Ваш ответ…" aria-label="Ответ валидатору" data-testid="input-validator-reply"/>
+          <input className="chat-input" value={chatInput} onChange={e=>setChatInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')handleReply();}} disabled={!hasAiMessage||isReplyPending||isDocumentUploading} placeholder={copy.replyPlaceholder} aria-label={copy.replyAria} data-testid="input-validator-reply"/>
           <button type="button" className="send-btn" onClick={handleReply} disabled={!hasAiMessage||!chatInput.trim()||isReplyPending||isDocumentUploading||authStatus?.authenticated===false} data-testid="button-validator-reply"><Send size={13}/></button>
         </div>
       </section>
-      <div className="eyebrow" style={{display:'flex',justifyContent:'space-between'}}><span>ЛОГИКА · СХЕМА · ЭКСПОРТ</span><span>v1.0</span></div>
+      <div className="eyebrow" style={{display:'flex',justifyContent:'space-between'}}><span>{copy.footerWorkflow}</span><span>v1.0</span></div>
     </aside>
-    <div className={`resize-grip ${isResizing?'dragging':''}`} onMouseDown={()=>setIsResizing(true)} title="Зажмите, чтобы изменить размер" role="separator" aria-label="Изменить ширину панели" data-testid="resize-sidebar"/>
+    <div className={`resize-grip ${isResizing?'dragging':''}`} onMouseDown={()=>setIsResizing(true)} title={copy.resizeTitle} role="separator" aria-label={copy.resizeAria} data-testid="resize-sidebar"/>
     <main className="work-area">
       <header className="topbar">
-        <div className="canvas-heading"><div className="canvas-icon"><Network size={16}/></div><div><div className="canvas-title">Холст диаграммы</div><div className="canvas-sub" data-testid="status-canvas-summary">{hasGenerated?`${graph.nodes.length} элементов · ${graph.edges.length} потоков`:'Готов к построению процесса'}</div></div></div>
+        <div className="canvas-heading"><div className="canvas-icon"><Network size={16}/></div><div><div className="canvas-title">{copy.canvasTitle}</div><div className="canvas-sub" data-testid="status-canvas-summary">{hasGenerated?copy.canvasSummary(graph.nodes.length,graph.edges.length):copy.canvasReady}</div></div></div>
         <div className="toolbar">
-          <button type="button" className="secondary-btn" disabled={!isValidated} onClick={()=>setSqlSchema(generateSqlSchema(currentXml))} title={!isValidated&&hasGenerated?'Ответьте на вопрос ИИ-валидатора, чтобы подтвердить логику процесса или завершите сценарий вручную':undefined} data-testid="button-generate-sql">Схема БД</button>
-          <SpecExportButton xml={currentXml} disabled={!isValidated} hasDiagram={hasGenerated}/>
+          <button type="button" className="secondary-btn" disabled={!isValidated} onClick={()=>setSqlSchema(generateSqlSchema(currentXml,language))} title={!isValidated&&hasGenerated?copy.validatorTooltip:undefined} data-testid="button-generate-sql">{copy.databaseButton}</button>
+          <SpecExportButton xml={currentXml} disabled={!isValidated} hasDiagram={hasGenerated} language={language}/>
           <div className={`auth-bar${signedInUser?' is-authenticated':''}`} data-testid="auth-status">
             {signedInUser?<>
               <div className="auth-summary">
                 <span className="auth-email" title={signedInUser.email}>{signedInUser.email}</span>
-                <span className="auth-quota">{signedInUser.isWhitelisted?'Безлимитный доступ':signedInUser.hasActivePremium?'Безлимит':`Бесплатно: ${signedInUser.freeGenerationsLeft??0}`}</span>
+                <span className="auth-quota">{signedInUser.isWhitelisted?copy.unlimitedAccess:signedInUser.hasActivePremium?copy.unlimited:copy.freeQuota(signedInUser.freeGenerationsLeft??0)}</span>
               </div>
-              <button type="button" className="auth-action" onClick={()=>void handleLogout()}>Выйти</button>
+              <button type="button" className="auth-action" onClick={()=>void handleLogout()}>{copy.logout}</button>
             </>:<>
-              <span className="auth-prompt" title="Войдите для генерации">{authStatus===null?'Проверка входа…':'Войдите для генерации'}</span>
-              <a className="auth-action" href="/api/auth/google?next=%2F" onClick={()=>saveDescriptionDraft(userInput)}>Войти через Google</a>
+              <span className="auth-prompt" title={copy.authPrompt}>{authStatus===null?copy.authChecking:copy.authPrompt}</span>
+              <a className="auth-action" href="/api/auth/google?next=%2F" onClick={()=>saveDescriptionDraft(userInput)}>{copy.loginWithGoogle}</a>
             </>}
           </div>
         </div>
@@ -388,18 +390,19 @@ export default function App(){
         <BPMNViewer
           xml={currentXml}
           importVersion={diagramImportVersion}
+          language={language}
           onXmlChange={handleModelerXmlChange}
           onRegisterXmlFlush={registerDiagramXmlFlush}
         />
-        <button type="button" className="canvas-clear" onClick={handleClearCanvas} disabled={!hasGenerated} data-testid="button-clear-canvas">Очистить холст</button>
+        <button type="button" className="canvas-clear" onClick={handleClearCanvas} disabled={!hasGenerated} data-testid="button-clear-canvas">{copy.clearCanvas}</button>
       </div>
-      <footer className="footer-note"><span data-testid="status-validation">{isValidated?<><Check size={11} style={{verticalAlign:'-2px',marginRight:4}}/>ЛОГИКА ПОДТВЕРЖДЕНА</>:'ОЖИДАЕТ ПРОВЕРКИ ВАЛИДАТОРОМ'}</span><span>ЧЕРТЁЖ BPMN 2.0</span></footer>
+      <footer className="footer-note"><span data-testid="status-validation">{isValidated?<><Check size={11} style={{verticalAlign:'-2px',marginRight:4}}/>{copy.validated}</>:copy.waitingForValidator}</span><span>{copy.bpmnDrawing}</span></footer>
     </main>
     {sqlSchema!==null&&<div className="modal-backdrop" onClick={()=>setSqlSchema(null)} role="presentation">
       <div className="sql-modal" role="dialog" aria-modal="true" aria-labelledby="sql-heading" onClick={e=>e.stopPropagation()}>
-        <div className="modal-head"><div><h2 id="sql-heading">Схема базы данных</h2><p>DDL сгенерирован по текущей BPMN-диаграмме</p></div><div className="modal-actions">
-          <button type="button" onClick={()=>void copySql()} data-testid="button-copy-sql">{isCopied?'Скопировано':'Копировать SQL'}</button>
-          <button type="button" onClick={()=>setSqlSchema(null)} data-testid="button-close-sql">Закрыть</button>
+        <div className="modal-head"><div><h2 id="sql-heading">{copy.sqlTitle}</h2><p>{copy.sqlDescription}</p></div><div className="modal-actions">
+          <button type="button" onClick={()=>void copySql()} data-testid="button-copy-sql">{isCopied?copy.copied:copy.copySql}</button>
+          <button type="button" onClick={()=>setSqlSchema(null)} data-testid="button-close-sql">{copy.close}</button>
         </div></div>
         <pre className="sql-code" data-testid="result-sql-schema"><code>{sqlSchema}</code></pre>
       </div>

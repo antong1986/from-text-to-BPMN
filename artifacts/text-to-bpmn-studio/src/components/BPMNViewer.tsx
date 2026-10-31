@@ -3,6 +3,7 @@ import BpmnModeler from 'bpmn-js/lib/Modeler';
 import { Download } from 'lucide-react';
 import { downloadFile } from '../utils/downloadFile';
 import { taskChooserPaletteModule } from './taskChooserPalette';
+import { getUiText, translateBpmnUi, type Language } from '../i18n';
 
 type CanvasApi = { zoom: (value:string|number)=>void };
 type ShapeType = 'bpmn:Task'|'bpmn:UserTask'|'bpmn:ServiceTask'|'bpmn:ExclusiveGateway'|'bpmn:ParallelGateway'|'bpmn:EventBasedGateway';
@@ -19,19 +20,23 @@ type ElementFactoryApi = {createShape:(attributes:{type:ShapeType})=>unknown};
 export default function BPMNViewer({
   xml,
   importVersion,
+  language,
   onXmlChange,
   onRegisterXmlFlush,
 }:{
   xml:string;
   importVersion:number;
+  language:Language;
   onXmlChange:(xml:string)=>void;
   onRegisterXmlFlush:(flush:(()=>Promise<string>)|null)=>void;
 }) {
+  const copy=getUiText(language);
   const host = useRef<HTMLDivElement>(null);
   const chooser = useRef<HTMLDivElement>(null);
   const chooserTrigger = useRef<HTMLElement|null>(null);
   const modeler = useRef<BpmnModeler|null>(null);
   const incomingXml = useRef(xml);
+  const languageRef = useRef(language);
   const onXmlChangeRef = useRef(onXmlChange);
   const onRegisterXmlFlushRef = useRef(onRegisterXmlFlush);
   const importing = useRef(false);
@@ -41,18 +46,27 @@ export default function BPMNViewer({
   const exportTimer = useRef<number|undefined>(undefined);
   const [chooserKind,setChooserKind] = useState<ChooserKind|null>(null);
   const [chooserPosition,setChooserPosition] = useState<ChooserPosition>({left:68,top:8});
-  const [renderError,setRenderError] = useState('');
-  const [exportError,setExportError] = useState('');
+  const [renderError,setRenderError] = useState(false);
+  const [exportError,setExportError] = useState<'xml'|'svg'|null>(null);
+  const [modelerReady,setModelerReady] = useState(false);
   incomingXml.current=xml;
+  languageRef.current=language;
   onXmlChangeRef.current=onXmlChange;
   onRegisterXmlFlushRef.current=onRegisterXmlFlush;
   useEffect(()=>{
     if(!host.current) return;
     const instance = new BpmnModeler({
       container:host.current,
-      additionalModules:[taskChooserPaletteModule],
+      additionalModules:[
+        taskChooserPaletteModule,
+        {
+          translate: ['value', (template:string,replacements?:Record<string,string>) =>
+            translateBpmnUi(template,languageRef.current,replacements)],
+        },
+      ],
     });
     modeler.current=instance;
+    setModelerReady(true);
     const eventBus=instance.get('eventBus') as EventBusApi;
     const flushXml=async()=>{
       exportRequestId.current++;
@@ -116,6 +130,21 @@ export default function BPMNViewer({
     };
   },[]);
   useEffect(()=>{
+    if(!modelerReady)return;
+    const root=host.current;
+    if(!root)return;
+    const updateTitles=()=>{
+      root.querySelectorAll<HTMLElement>('[title]').forEach(entry=>{
+        const title=entry.getAttribute('title');
+        if(title)entry.setAttribute('title',translateBpmnUi(title,languageRef.current));
+      });
+    };
+    updateTitles();
+    const observer=new MutationObserver(updateTitles);
+    observer.observe(root,{childList:true,subtree:true});
+    return()=>observer.disconnect();
+  },[language,modelerReady]);
+  useEffect(()=>{
     if(!chooserKind)return;
     const closeOnOutsidePointer=(event:PointerEvent)=>{
       const target=event.target;
@@ -146,10 +175,10 @@ export default function BPMNViewer({
       try {
         await modeler.current.importXML(incomingXml.current);
         if(disposed)return;
-        setRenderError('');
+        setRenderError(false);
         modeler.current.get<CanvasApi>('canvas').zoom('fit-viewport');
       }catch(error){
-        if(!disposed){ console.error('Ошибка BPMN:',error);setRenderError('Не удалось отобразить диаграмму. Проверьте структуру схемы.'); }
+        if(!disposed){ console.error('Ошибка BPMN:',error);setRenderError(true); }
       }finally{
         if(requestId===importRequestId.current)importing.current=false;
       }
@@ -168,11 +197,11 @@ export default function BPMNViewer({
     setChooserKind(null);
   };
   const exportAs=async(kind:'xml'|'svg')=>{
-    if(!modeler.current)return;setExportError('');
+    if(!modeler.current)return;setExportError(null);
     try{
       if(kind==='xml'){const result=await modeler.current.saveXML({format:true});if(!result.xml)throw new Error();downloadFile(result.xml,'application/bpmn20-xml;charset=UTF-8','diagram.bpmn');}
       else {const result=await modeler.current.saveSVG();if(!result.svg)throw new Error();downloadFile(result.svg,'image/svg+xml;charset=UTF-8','diagram.svg');}
-    }catch{setExportError(kind==='xml'?'Не удалось выгрузить BPMN. Проверьте, что диаграмма построена.':'Не удалось выгрузить SVG. Проверьте, что диаграмма построена.');}
+    }catch{setExportError(kind);}
   };
   return <div className="bpmn-stage" data-testid="bpmn-stage">
     <div ref={host} className="bpmn-host" />
@@ -180,7 +209,7 @@ export default function BPMNViewer({
       ref={chooser}
       className="palette-chooser"
       role="dialog"
-      aria-label={chooserKind==='task'?'Task types':'Gateway types'}
+       aria-label={chooserKind==='task'?copy.tasks:copy.gateways}
       data-testid={`${chooserKind}-chooser`}
       style={{left:chooserPosition.left,top:chooserPosition.top}}
     >
@@ -189,7 +218,7 @@ export default function BPMNViewer({
         <button
           type="button"
           className="palette-chooser-close"
-          aria-label={`Close ${chooserKind} chooser`}
+          aria-label={chooserKind==='task'?copy.closeTaskChooser:copy.closeGatewayChooser}
           data-testid="button-close-chooser"
           onClick={()=>setChooserKind(null)}
         >×</button>
@@ -203,8 +232,8 @@ export default function BPMNViewer({
         >
           <span className="palette-chooser-icon bpmn-icon-task" aria-hidden="true" />
           <span className="palette-chooser-copy">
-            <strong>Task</strong>
-            <small>A general process task</small>
+            <strong>{copy.task}</strong>
+            <small>{copy.taskDescription}</small>
           </span>
         </button>
         <button
@@ -215,8 +244,8 @@ export default function BPMNViewer({
         >
           <span className="palette-chooser-icon bpmn-icon-user-task" aria-hidden="true" />
           <span className="palette-chooser-copy">
-            <strong>User task</strong>
-            <small>Work performed by a person</small>
+            <strong>{copy.userTask}</strong>
+            <small>{copy.userTaskDescription}</small>
           </span>
         </button>
         <button
@@ -227,8 +256,8 @@ export default function BPMNViewer({
         >
           <span className="palette-chooser-icon bpmn-icon-service" aria-hidden="true" />
           <span className="palette-chooser-copy">
-            <strong>Service task</strong>
-            <small>Automated work performed by a service or system</small>
+            <strong>{copy.serviceTask}</strong>
+            <small>{copy.serviceTaskDescription}</small>
           </span>
         </button>
       </>:<>
@@ -240,8 +269,8 @@ export default function BPMNViewer({
         >
           <span className="palette-chooser-icon bpmn-icon-gateway-xor" aria-hidden="true" />
           <span className="palette-chooser-copy">
-            <strong>Exclusive gateway</strong>
-            <small>Routes the token down one path, based on data</small>
+            <strong>{copy.exclusiveGateway}</strong>
+            <small>{copy.exclusiveGatewayDescription}</small>
           </span>
         </button>
         <button
@@ -252,8 +281,8 @@ export default function BPMNViewer({
         >
           <span className="palette-chooser-icon bpmn-icon-gateway-parallel" aria-hidden="true" />
           <span className="palette-chooser-copy">
-            <strong>Parallel gateway</strong>
-            <small>Splits the flow into parallel paths, or joins them</small>
+            <strong>{copy.parallelGateway}</strong>
+            <small>{copy.parallelGatewayDescription}</small>
           </span>
         </button>
         <button
@@ -264,17 +293,17 @@ export default function BPMNViewer({
         >
           <span className="palette-chooser-icon bpmn-icon-gateway-eventbased" aria-hidden="true" />
           <span className="palette-chooser-copy">
-            <strong>Event-based gateway</strong>
-            <small>Follows the path of whichever event occurs first</small>
+            <strong>{copy.eventBasedGateway}</strong>
+            <small>{copy.eventBasedGatewayDescription}</small>
           </span>
         </button>
       </>}
     </div>}
-    {renderError&&<div className="render-alert" role="status" data-testid="status-render-error">{renderError}</div>}
+    {renderError&&<div className="render-alert" role="status" data-testid="status-render-error">{copy.renderError}</div>}
     <div className="export-float">
-      <button type="button" onClick={()=>void exportAs('xml')} data-testid="button-download-bpmn"><Download size={12}/> Скачать BPMN (XML)</button>
-      <button type="button" onClick={()=>void exportAs('svg')} data-testid="button-download-svg"><Download size={12}/> Скачать SVG</button>
+      <button type="button" onClick={()=>void exportAs('xml')} data-testid="button-download-bpmn"><Download size={12}/> {copy.exportBpmn}</button>
+      <button type="button" onClick={()=>void exportAs('svg')} data-testid="button-download-svg"><Download size={12}/> {copy.exportSvg}</button>
     </div>
-    {exportError&&<div className="render-alert" style={{top:'auto',bottom:58}} role="status" data-testid="status-export-error">{exportError}</div>}
+    {exportError&&<div className="render-alert" style={{top:'auto',bottom:58}} role="status" data-testid="status-export-error">{exportError==='xml'?copy.exportXmlError:copy.exportSvgError}</div>}
   </div>;
 }

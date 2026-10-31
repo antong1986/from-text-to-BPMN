@@ -1,8 +1,11 @@
 import type { BpmnGraph, BpmnNode } from '@workspace/api-client-react';
 
 const defaultNames: Record<BpmnNode['type'], string> = {
-  start: 'Начало', end: 'Завершение', userTask: 'Действие пользователя',
-  serviceTask: 'Автоматическое действие', gateway: 'Условие',
+  start: 'Start',
+  end: 'End',
+  userTask: 'User task',
+  serviceTask: 'Service task',
+  gateway: 'Gateway',
 };
 
 function parseValue(value: unknown): unknown {

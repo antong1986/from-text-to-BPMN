@@ -27,22 +27,24 @@ type Create = {
 type EventBus = {
   fire: (eventName: string, data: { sourceEvent: Event }) => void;
 };
+type Translate = (template: string, replacements?: Record<string, string>) => string;
 
 class TaskChooserPaletteProvider {
-  static $inject = ['palette', 'create', 'elementFactory', 'eventBus'];
+  static $inject = ['palette', 'create', 'elementFactory', 'eventBus', 'translate'];
 
   constructor(
     palette: Palette,
     create: Create,
     elementFactory: ElementFactory,
     eventBus: EventBus,
+    translate: Translate,
   ) {
     palette.registerProvider(500, {
       getPaletteEntries: () => ({
         'create.task': {
           group: 'activity',
           className: 'bpmn-icon-task',
-          title: 'Create task',
+          title: translate('Create task'),
           action: {
             dragstart: (event) => {
               create.start(
@@ -58,7 +60,7 @@ class TaskChooserPaletteProvider {
         'create.exclusive-gateway': {
           group: 'gateway',
           className: 'bpmn-icon-gateway-none',
-          title: 'Create gateway',
+          title: translate('Create gateway'),
           action: {
             dragstart: (event) => {
               create.start(
