@@ -3,6 +3,15 @@ import { ArrowLeft, Crown, RefreshCw, Search, ShieldCheck, Users } from "lucide-
 
 type AdminLanguage = "en" | "ru";
 type AdminSource = "development" | "production";
+const ADMIN_API_BASE_URL = import.meta.env.VITE_API_URL?.trim().replace(/\/+$/, "") ?? "";
+const IS_PRODUCTION_ADMIN_API = (() => {
+  if (!ADMIN_API_BASE_URL) return false;
+  try {
+    return new URL(ADMIN_API_BASE_URL).hostname.toLowerCase() === "from-text-to-bpmn-api.onrender.com";
+  } catch {
+    return false;
+  }
+})();
 type AdminStats = {
   totalUsers: number;
   activePremiumSubscriptions: number;
@@ -109,9 +118,12 @@ function getInitialLanguage(): AdminLanguage {
 }
 
 async function adminFetch<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, {
+  const requestUrl = ADMIN_API_BASE_URL
+    ? new URL(url, `${ADMIN_API_BASE_URL}/`).toString()
+    : url;
+  const response = await fetch(requestUrl, {
     ...init,
-    credentials: "same-origin",
+    credentials: "include",
     headers: { "Content-Type": "application/json", ...init?.headers },
   });
   if (response.status === 401 || response.status === 403) {
@@ -139,7 +151,9 @@ export default function AdminPanel() {
   const [authorized, setAuthorized] = useState(false);
   const [checkingAccess, setCheckingAccess] = useState(true);
   const [adminEmail, setAdminEmail] = useState("");
-  const [source, setSource] = useState<AdminSource>("development");
+  const [source, setSource] = useState<AdminSource>(() =>
+    IS_PRODUCTION_ADMIN_API ? "production" : "development",
+  );
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [search, setSearch] = useState("");
@@ -307,23 +321,25 @@ export default function AdminPanel() {
         </header>
 
         <div className="mb-6 flex flex-wrap items-center gap-3">
-          <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm" aria-label={text.dataSource}>
-            {(["development", "production"] as const).map((option) => (
-              <button
-                key={option}
-                type="button"
-                aria-pressed={source === option}
-                onClick={() => setSource(option)}
-                className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
-                  source === option
-                    ? "bg-teal-700 text-white"
-                    : "text-slate-600 hover:bg-slate-100"
-                }`}
-              >
-                {text[option]}
-              </button>
-            ))}
-          </div>
+          {!IS_PRODUCTION_ADMIN_API && (
+            <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm" aria-label={text.dataSource}>
+              {(["development", "production"] as const).map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  aria-pressed={source === option}
+                  onClick={() => setSource(option)}
+                  className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
+                    source === option
+                      ? "bg-teal-700 text-white"
+                      : "text-slate-600 hover:bg-slate-100"
+                  }`}
+                >
+                  {text[option]}
+                </button>
+              ))}
+            </div>
+          )}
           {source === "production" && (
             <p className="text-sm text-slate-500">{text.productionReadOnly}</p>
           )}

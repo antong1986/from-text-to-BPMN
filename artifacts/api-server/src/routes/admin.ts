@@ -159,6 +159,13 @@ router.get("/production-snapshot", async (req, res): Promise<void> => {
       res.status(503).json({ error: "Production API URL must use HTTPS." });
       return;
     }
+    if (req.hostname.toLowerCase() === apiUrl.hostname.toLowerCase()) {
+      const localSnapshot = await loadSnapshot(getSearchTerm(query.data.email));
+      res.setHeader("Cache-Control", "no-store");
+      res.json(GetAdminProductionSnapshotResponse.parse(localSnapshot));
+      return;
+    }
+
     const snapshotUrl = new URL("/api/admin/internal/snapshot", apiUrl);
     const search = getSearchTerm(query.data.email);
     if (search) snapshotUrl.searchParams.set("email", search);
