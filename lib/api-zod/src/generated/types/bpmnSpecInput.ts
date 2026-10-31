@@ -9,4 +9,6 @@ import type { BpmnGraph } from './bpmnGraph';
 
 export interface BpmnSpecInput {
   graph: BpmnGraph;
+  /** Original process description, used to match the specification language. */
+  sourceDescription?: string;
 }

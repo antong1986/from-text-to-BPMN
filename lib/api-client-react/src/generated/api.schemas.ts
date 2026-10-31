@@ -96,6 +96,8 @@ export interface BpmnRefineResponse {
 
 export interface BpmnSpecInput {
   graph: BpmnGraph;
+  /** Original process description, used to match the specification language. */
+  sourceDescription?: string;
 }
 
 export interface BpmnSpecResponse {

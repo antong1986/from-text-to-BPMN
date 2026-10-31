@@ -164,7 +164,8 @@ export const GenerateSpecBody = zod.object({
   "to": zod.string(),
   "condition": zod.string().optional()
 }))
-})
+}),
+  "sourceDescription": zod.string().optional().describe('Original process description, used to match the specification language.')
 })
 
 export const GenerateSpecResponse = zod.object({

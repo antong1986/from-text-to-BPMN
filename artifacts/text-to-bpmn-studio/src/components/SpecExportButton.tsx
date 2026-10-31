@@ -7,7 +7,7 @@ import { downloadFile } from '../utils/downloadFile';
 
 import { getUiText, type Language } from '../i18n';
 
-export default function SpecExportButton({xml,disabled,hasDiagram,language}:{xml:string;disabled:boolean;hasDiagram:boolean;language:Language}) {
+export default function SpecExportButton({xml,sourceDescription,disabled,hasDiagram,language}:{xml:string;sourceDescription:string;disabled:boolean;hasDiagram:boolean;language:Language}) {
   const copy=getUiText(language);
   const [open,setOpen]=useState(false),[error,setError]=useState(false);
   const ref=useRef<HTMLDivElement>(null);
@@ -24,7 +24,7 @@ export default function SpecExportButton({xml,disabled,hasDiagram,language}:{xml
     setOpen(false);setError(false);
     try{
       const graph=extractGraphFromXml(xml);
-      const response=await specMutation.mutateAsync({data:{graph}});
+      const response=await specMutation.mutateAsync({data:{graph,sourceDescription}});
       if(!response.spec)throw new Error('Server returned an empty specification.');
       if(format==='md')downloadFile(response.spec,'text/markdown;charset=UTF-8','tech-spec.md');
       else {

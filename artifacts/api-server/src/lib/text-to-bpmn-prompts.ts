@@ -28,3 +28,9 @@ export const BPMN_SPEC_SYSTEM_PROMPT = `Ты — Senior Системный Ан�
 - Для каждой User Story используй формат «Как <роль>, я хочу <действие>, чтобы <ценность>», а критерии приёмки оформляй списком в стиле «Дано — Когда — Тогда».
 - Опирайся только на узлы и связи из графа: не выдумывай шаги, которых в нём нет.
 - Не пиши лишних приветствий, вступлений и заключений — только текст ТЗ.`
+
+export function buildBpmnSpecLanguageInstruction(language: "en" | "ru"): string {
+  return language === "en"
+    ? `SPECIFICATION LANGUAGE — ENGLISH ONLY. Write the entire technical specification in English, including section headings, descriptions, roles, user stories, acceptance criteria, integration details, edge cases, and error handling. Translate process labels where needed. Do not include Russian text. Preserve the graph's meaning and do not add steps not present in the graph.`
+    : `ЯЗЫК СПЕЦИФИКАЦИИ — ТОЛЬКО РУССКИЙ. Напиши всё техническое задание на русском языке, включая заголовки, описание, роли, пользовательские истории, критерии приёмки, интеграции, крайние сценарии и обработку ошибок. При необходимости переведи подписи процесса. Не используй английский текст, кроме общепринятых технических терминов. Сохраняй смысл графа и не добавляй отсутствующие в нём шаги.`;
+}

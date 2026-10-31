@@ -371,7 +371,7 @@ export default function App(){
         <div className="canvas-heading"><div className="canvas-icon"><Network size={16}/></div><div><div className="canvas-title">{copy.canvasTitle}</div><div className="canvas-sub" data-testid="status-canvas-summary">{hasGenerated?copy.canvasSummary(graph.nodes.length,graph.edges.length):copy.canvasReady}</div></div></div>
         <div className="toolbar">
           <button type="button" className="secondary-btn" disabled={!isValidated} onClick={()=>setSqlSchema(generateSqlSchema(currentXml,language))} title={!isValidated&&hasGenerated?copy.validatorTooltip:undefined} data-testid="button-generate-sql">{copy.databaseButton}</button>
-          <SpecExportButton xml={currentXml} disabled={!isValidated} hasDiagram={hasGenerated} language={language}/>
+          <SpecExportButton xml={currentXml} sourceDescription={userInput} disabled={!isValidated} hasDiagram={hasGenerated} language={language}/>
           <div className={`auth-bar${signedInUser?' is-authenticated':''}`} data-testid="auth-status">
             {signedInUser?<>
               <div className="auth-summary">

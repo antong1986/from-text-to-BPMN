@@ -385,6 +385,9 @@ components:
       properties:
         graph:
           $ref: "#/components/schemas/BpmnGraph"
+        sourceDescription:
+          type: string
+          description: Original process description, used to match the specification language.
       required: [graph]
     BpmnSpecResponse:
       type: object

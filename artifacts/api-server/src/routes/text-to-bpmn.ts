@@ -24,6 +24,7 @@ import {
   BPMN_GRAPH_SYSTEM_PROMPT,
   BPMN_REFINEMENT_SYSTEM_PROMPT,
   BPMN_SPEC_SYSTEM_PROMPT,
+  buildBpmnSpecLanguageInstruction,
 } from "../lib/text-to-bpmn-prompts";
 import {
   checkBPMNLimits,
@@ -411,9 +412,20 @@ router.post("/generate-spec", checkBPMNLimits, async (req, res): Promise<void> =
     return;
   }
 
+  const graphLanguageSource = [
+    ...input.data.graph.nodes.map((node) => node.name),
+    ...input.data.graph.edges.map((edge) => edge.condition ?? ""),
+  ].join("\n");
+  const sourceLanguage = detectBpmnSourceLanguage(
+    input.data.sourceDescription?.trim() || graphLanguageSource,
+  );
+
   const result = await callModel(
     [
-      { role: "system", content: BPMN_SPEC_SYSTEM_PROMPT },
+      {
+        role: "system",
+        content: `${BPMN_SPEC_SYSTEM_PROMPT}\n\n${buildBpmnSpecLanguageInstruction(sourceLanguage)}`,
+      },
       {
         role: "user",
         content: `JSON-граф процесса:\n${JSON.stringify(input.data.graph, null, 2)}`,
