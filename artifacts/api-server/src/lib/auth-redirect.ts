@@ -1,4 +1,4 @@
-import { PRODUCTION_FRONTEND_ORIGIN } from "./cross-origin-auth";
+const PRODUCTION_FRONTEND_ORIGIN = "https://from-text-to-bpmn.vercel.app";
 
 function getDefaultReturnTo(): string {
   return process.env.NODE_ENV === "production"
