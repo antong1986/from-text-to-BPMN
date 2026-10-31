@@ -93,7 +93,9 @@ router.get("/auth/me", (req, res) => {
       email: user.email,
       isPremium: user.isPremium,
       hasActivePremium,
-      freeGenerationsLeft: user.freeGenerationsLeft,
+      ...(!user.isWhitelisted && !hasActivePremium
+        ? { freeGenerationsLeft: user.freeGenerationsLeft }
+        : {}),
       premiumUntil: user.premiumUntil,
       isWhitelisted: user.isWhitelisted,
     },

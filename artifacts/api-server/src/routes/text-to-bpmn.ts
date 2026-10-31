@@ -219,7 +219,7 @@ router.post("/generate", checkBPMNLimits, async (req, res): Promise<void> => {
   }
 
   if (!(await consumeBPMNGeneration(req))) {
-    sendPaymentRequired(res);
+    sendPaymentRequired(res, req.bpmnLimitMode);
     return;
   }
   res.json(GenerateBpmnResponse.parse(result));
@@ -261,7 +261,7 @@ router.post("/upload-document",checkBPMNLimits,receiveDocument,async(req,res):Pr
     return;
   }
   if (!(await consumeBPMNGeneration(req))) {
-    sendPaymentRequired(res);
+    sendPaymentRequired(res, req.bpmnLimitMode);
     return;
   }
   res.json(output.data);
@@ -340,7 +340,7 @@ router.post("/refine", checkBPMNLimits, async (req, res): Promise<void> => {
   }
 
   if (!(await consumeBPMNGeneration(req))) {
-    sendPaymentRequired(res);
+    sendPaymentRequired(res, req.bpmnLimitMode);
     return;
   }
   res.json(output.data);
@@ -384,7 +384,7 @@ router.post("/generate-spec", checkBPMNLimits, async (req, res): Promise<void> =
   }
 
   if (!(await consumeBPMNGeneration(req))) {
-    sendPaymentRequired(res);
+    sendPaymentRequired(res, req.bpmnLimitMode);
     return;
   }
   res.json(output.data);

@@ -195,7 +195,7 @@ router.post("/bpmn/generate", checkBPMNLimits, async (req, res): Promise<void> =
   }
 
   if (!(await consumeBPMNGeneration(req))) {
-    sendPaymentRequired(res);
+    sendPaymentRequired(res, req.bpmnLimitMode);
     return;
   }
 

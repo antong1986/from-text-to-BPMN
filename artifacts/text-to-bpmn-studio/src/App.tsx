@@ -28,7 +28,7 @@ type AuthStatus={
   user?:{
     email:string;
     hasActivePremium:boolean;
-    freeGenerationsLeft:number;
+    freeGenerationsLeft?:number;
     isWhitelisted:boolean;
   };
 };
@@ -374,7 +374,7 @@ export default function App(){
             {signedInUser?<>
               <div className="auth-summary">
                 <span className="auth-email" title={signedInUser.email}>{signedInUser.email}</span>
-                <span className="auth-quota">{signedInUser.isWhitelisted?'Безлимитный доступ':signedInUser.hasActivePremium?'Активная подписка':`Бесплатно: ${signedInUser.freeGenerationsLeft}`}</span>
+                <span className="auth-quota">{signedInUser.isWhitelisted?'Безлимитный доступ':signedInUser.hasActivePremium?'Безлимит':`Бесплатно: ${signedInUser.freeGenerationsLeft??0}`}</span>
               </div>
               <button type="button" className="auth-action" onClick={()=>void handleLogout()}>Выйти</button>
             </>:<>

@@ -17,6 +17,11 @@ export const usersTable = pgTable("users", {
   isPremium: boolean("is_premium").notNull().default(false),
   freeGenerationsLeft: integer("free_generations_left").notNull().default(3),
   premiumUntil: timestamp("premium_until", { withTimezone: true, mode: "date" }),
+  premiumGenerationsUsed: integer("premium_generations_used").notNull().default(0),
+  premiumWindowStartedAt: timestamp("premium_window_started_at", {
+    withTimezone: true,
+    mode: "date",
+  }),
   isWhitelisted: boolean("is_whitelisted").notNull().default(false),
 });
 
