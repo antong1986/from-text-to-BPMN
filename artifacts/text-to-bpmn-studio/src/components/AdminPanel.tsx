@@ -4,6 +4,14 @@ import { ArrowLeft, Crown, RefreshCw, Search, ShieldCheck, Users } from "lucide-
 type AdminLanguage = "en" | "ru";
 type AdminSource = "development" | "production";
 const ADMIN_API_BASE_URL = import.meta.env.VITE_API_URL?.trim().replace(/\/+$/, "") ?? "";
+function getAdminGoogleLoginHref(): string {
+  const loginUrl = ADMIN_API_BASE_URL
+    ? new URL("/api/auth/google", ADMIN_API_BASE_URL)
+    : new URL("/api/auth/google", window.location.origin);
+  loginUrl.searchParams.set("next", `${window.location.origin}/admin-panel`);
+  return loginUrl.toString();
+}
+
 const IS_PRODUCTION_ADMIN_API = (() => {
   if (!ADMIN_API_BASE_URL) return false;
   try {
@@ -70,6 +78,8 @@ const copy = {
     dataSource: "Data source",
     productionReadOnly: "Production data is read-only here. User changes are disabled.",
     productionUnavailable: "Production data is not connected. Configure the shared admin sync secret in Replit and Render, then deploy the Render API.",
+    signInRequired: "Sign in with your whitelisted Google account to open the administration panel.",
+    loginWithGoogle: "Sign in with Google",
   },
   ru: {
     title: "Административная панель",
@@ -106,6 +116,8 @@ const copy = {
     dataSource: "Источник данных",
     productionReadOnly: "Данные production доступны только для чтения. Изменение пользователей отключено.",
     productionUnavailable: "Production не подключён. Настройте общий секрет синхронизации в Replit и Render, затем разверните API на Render.",
+    signInRequired: "Войдите через Google под аккаунтом из вайтлиста, чтобы открыть административную панель.",
+    loginWithGoogle: "Войти через Google",
   },
 } satisfies Record<AdminLanguage, Record<string, string>>;
 
@@ -150,6 +162,7 @@ export default function AdminPanel() {
   const text = copy[language];
   const [authorized, setAuthorized] = useState(false);
   const [checkingAccess, setCheckingAccess] = useState(true);
+  const [requiresSignIn, setRequiresSignIn] = useState(false);
   const [adminEmail, setAdminEmail] = useState("");
   const [source, setSource] = useState<AdminSource>(() =>
     IS_PRODUCTION_ADMIN_API ? "production" : "development",
@@ -177,7 +190,11 @@ export default function AdminPanel() {
     const verifyAccess = async () => {
       try {
         const session = await adminFetch<AuthResponse>("/api/auth/me");
-        if (!session.authenticated || !session.user?.isWhitelisted) {
+        if (!session.authenticated) {
+          if (!cancelled) setRequiresSignIn(true);
+          return;
+        }
+        if (!session.user?.isWhitelisted) {
           window.location.replace("/");
           return;
         }
@@ -284,11 +301,55 @@ export default function AdminPanel() {
     try { window.localStorage.setItem("text-to-bpmn-language", next); } catch { /* Storage may be unavailable. */ }
   };
 
-  if (checkingAccess || !authorized) {
+  if (checkingAccess) {
     return (
       <main className="min-h-screen bg-slate-50 px-6 py-16 text-slate-600">
         <div className="mx-auto max-w-xl rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
-          {checkingAccess ? text.loading : error || text.loadError}
+          {text.loading}
+        </div>
+      </main>
+    );
+  }
+
+  if (requiresSignIn) {
+    return (
+      <main className="min-h-screen bg-slate-50 px-6 py-16 text-slate-600">
+        <div className="mx-auto max-w-xl rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+          <p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-teal-700">Text-to-BPMN</p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">{text.title}</h1>
+          <p className="mt-3 text-sm text-slate-500">{text.signInRequired}</p>
+          <div className="mt-6 flex flex-wrap justify-center gap-3">
+            <a
+              href={getAdminGoogleLoginHref()}
+              className="rounded-xl bg-teal-700 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-teal-800"
+            >
+              {text.loginWithGoogle}
+            </a>
+            <button
+              type="button"
+              onClick={() => window.location.assign("/")}
+              className="rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-100"
+            >
+              {text.back}
+            </button>
+            <button
+              type="button"
+              onClick={toggleLanguage}
+              className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-100"
+            >
+              {text.language}
+            </button>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  if (!authorized) {
+    return (
+      <main className="min-h-screen bg-slate-50 px-6 py-16 text-slate-600">
+        <div className="mx-auto max-w-xl rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+          {error || text.loadError}
         </div>
       </main>
     );
