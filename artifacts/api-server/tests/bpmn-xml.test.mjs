@@ -1,6 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { isCompleteBpmnXml, stripXmlMarkdownFences } from "../src/lib/bpmn-xml.ts";
+import {
+  buildBpmnCorrectionPrompt,
+  cleanAssistantXml,
+  isCompleteBpmnXml,
+  validateBpmnXml,
+} from "../src/lib/bpmn-xml.ts";
 
 const validXml = `<bpmn:definitions
   xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
@@ -26,16 +31,48 @@ const validXml = `<bpmn:definitions
   </bpmndi:BPMNDiagram>
 </bpmn:definitions>`;
 
-test("strips optional XML markdown fences", () => {
-  assert.equal(stripXmlMarkdownFences(`\`\`\`xml\n${validXml}\n\`\`\``), validXml);
+test("cleans markdown fences, introductory text, and trailing commentary", () => {
+  assert.equal(
+    cleanAssistantXml(`Вот ваш XML:\n\`\`\`xml\n${validXml}\n\`\`\`\nГотово.`),
+    validXml,
+  );
 });
 
 test("accepts a BPMN document with valid nodes, references, shapes, and edges", async () => {
   assert.equal(await isCompleteBpmnXml(validXml), true);
+  assert.deepEqual(await validateBpmnXml(validXml), { valid: true, reason: null });
 });
 
-test("rejects BPMN XML with an unresolved flow or missing diagram bounds", async () => {
+test("reports unresolved flow references and missing shapes", async () => {
   const unresolved = validXml.replace('targetRef="End_1"', 'targetRef="Missing_1"');
   assert.equal(await isCompleteBpmnXml(unresolved), false);
-  assert.equal(await isCompleteBpmnXml(validXml.replace('<bpmndi:BPMNShape id="Task_1_di" bpmnElement="Task_1"><dc:Bounds x="180" y="80" width="110" height="78" /></bpmndi:BPMNShape>', "")), false);
+  assert.match((await validateBpmnXml(unresolved)).reason, /sourceRef или targetRef/);
+
+  const missingShape = validXml.replace(
+    '<bpmndi:BPMNShape id="Task_1_di" bpmnElement="Task_1"><dc:Bounds x="180" y="80" width="110" height="78" /></bpmndi:BPMNShape>',
+    "",
+  );
+  assert.equal(await isCompleteBpmnXml(missingShape), false);
+  assert.match((await validateBpmnXml(missingShape)).reason, /BPMNShape/);
+});
+
+test("reports missing definitions, BPMNDiagram, and XML syntax errors", async () => {
+  assert.match((await validateBpmnXml("Текст без XML")).reason, /Отсутствует корневой тег/);
+
+  const missingDiagram = validXml.replace(
+    /<bpmndi:BPMNDiagram[\s\S]*?<\/bpmndi:BPMNDiagram>/,
+    "",
+  );
+  assert.match((await validateBpmnXml(missingDiagram)).reason, /Не найден блок BPMNDiagram/);
+
+  const malformed = validXml.replace("</bpmn:process>", "</bpmn:wrong>");
+  assert.match((await validateBpmnXml(malformed)).reason, /Ошибка парсинга синтаксиса XML/);
+});
+
+test("builds the one-shot self-correction prompt with the exact failure and first XML", () => {
+  const prompt = buildBpmnCorrectionPrompt("Оформить заявку.", "<broken-xml>", "Не найден блок BPMNDiagram.");
+  assert.match(prompt, /Твой предыдущий XML-код не прошел валидацию из-за ошибки: Не найден блок BPMNDiagram\./);
+  assert.match(prompt, /ИСКЛЮЧИТЕЛЬНО чистый, валидный BPMN 2\.0 XML код без лишних слов/);
+  assert.match(prompt, /Оформить заявку\./);
+  assert.match(prompt, /<broken-xml>/);
 });

@@ -1,6 +1,10 @@
 import { Router, type IRouter } from "express";
 import { checkBPMNLimits, consumeBPMNGeneration, sendPaymentRequired } from "../middlewares/bpmn-limits";
-import { isCompleteBpmnXml, stripXmlMarkdownFences } from "../lib/bpmn-xml";
+import {
+  buildBpmnCorrectionPrompt,
+  cleanAssistantXml,
+  validateBpmnXml,
+} from "../lib/bpmn-xml";
 import { fetchWithRetry } from "../lib/fetch-with-retry";
 
 const router: IRouter = Router();
@@ -20,7 +24,7 @@ function extractAssistantXml(payload: unknown): string | null {
   }).choices;
   const content = choices?.[0]?.message?.content;
   if (typeof content !== "string") return null;
-  return stripXmlMarkdownFences(content);
+  return cleanAssistantXml(content);
 }
 
 router.post("/bpmn/generate", checkBPMNLimits, async (req, res): Promise<void> => {
@@ -41,36 +45,76 @@ router.post("/bpmn/generate", checkBPMNLimits, async (req, res): Promise<void> =
     return;
   }
 
-  let response: Response;
   const model = OPENROUTER_MODEL;
-  try {
-    response = await fetchWithRetry(`${OPENROUTER_BASE_URL}/chat/completions`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        ...(process.env.APP_URL ? { "HTTP-Referer": process.env.APP_URL } : {}),
-        "X-Title": "Text-to-BPMN Studio",
-      },
-      body: JSON.stringify({
-        model,
-        temperature: 0.1,
-        max_tokens: 12000,
-        messages: [
-          { role: "system", content: BPMN_XML_SYSTEM_PROMPT },
-          { role: "user", content: textPrompt },
-        ],
-      }),
-    }, {
-      totalTimeoutMs: 180_000,
-      attemptTimeoutMs: 120_000,
-      initialRetryDelayMs: 5_000,
-      maxRetryDelayMs: 30_000,
-      onRetry: (attempt, status) => req.log.warn(
-        { model, attempt, status },
-        "Retrying a transient OpenRouter failure",
-      ),
+  const requestModel = (
+    messages: Array<{ role: "system" | "user"; content: string }>,
+    phase: "initial" | "self-correction",
+  ) => fetchWithRetry(`${OPENROUTER_BASE_URL}/chat/completions`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+      ...(process.env.APP_URL ? { "HTTP-Referer": process.env.APP_URL } : {}),
+      "X-Title": "Text-to-BPMN Studio",
+    },
+    body: JSON.stringify({
+      model,
+      temperature: 0.1,
+      max_tokens: 12000,
+      messages,
+    }),
+  }, {
+    totalTimeoutMs: 180_000,
+    attemptTimeoutMs: 120_000,
+    initialRetryDelayMs: 5_000,
+    maxRetryDelayMs: 30_000,
+    onRetry: (attempt, status) => req.log.warn(
+      { model, phase, attempt, status },
+      "Retrying a transient OpenRouter failure",
+    ),
+  });
+
+  const getValidatedXml = async (response: Response) => {
+    try {
+      const payload: unknown = await response.json();
+      const xml = extractAssistantXml(payload) ?? "";
+      return { xml, validation: await validateBpmnXml(xml) };
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      return {
+        xml: "",
+        validation: {
+          valid: false,
+          reason: `Ответ OpenRouter не удалось разобрать как JSON: ${detail.slice(0, 300)}`,
+        },
+      };
+    }
+  };
+
+  const logValidationFailure = (attempt: 1 | 2, reason: string) => {
+    console.log(JSON.stringify({
+      event: "bpmn_xml_validation_failed",
+      model,
+      attempt,
+      reason,
+    }));
+  };
+
+  const sendProviderError = (response: Response): void => {
+    req.log.warn({ model, status: response.status }, "OpenRouter returned an error after retry attempts");
+    res.status(response.status === 429 ? 503 : 502).json({
+      error: response.status === 429
+        ? "OpenRouter продолжает ограничивать запросы после повторных попыток. Проверьте квоту модели и повторите запрос позже."
+        : "OpenRouter не смог построить диаграмму. Проверьте настройки модели и API-ключ.",
     });
+  };
+
+  let response: Response;
+  try {
+    response = await requestModel([
+      { role: "system", content: BPMN_XML_SYSTEM_PROMPT },
+      { role: "user", content: textPrompt },
+    ], "initial");
   } catch (error) {
     req.log.warn(
       {
@@ -86,29 +130,51 @@ router.post("/bpmn/generate", checkBPMNLimits, async (req, res): Promise<void> =
   }
 
   if (!response.ok) {
-    req.log.warn({ model, status: response.status }, "OpenRouter returned an error after retry attempts");
-    res.status(response.status === 429 ? 503 : 502).json({
-      error: response.status === 429
-        ? "OpenRouter продолжает ограничивать запросы после повторных попыток. Проверьте квоту модели и повторите запрос позже."
-        : "OpenRouter не смог построить диаграмму. Проверьте настройки модели и API-ключ.",
-    });
+    sendProviderError(response);
     return;
   }
 
-  let payload: unknown;
-  try {
-    payload = await response.json();
-  } catch {
-    req.log.warn("OpenRouter returned an unreadable response");
-    res.status(502).json({ error: "OpenRouter вернул ответ в неизвестном формате." });
-    return;
-  }
+  let result = await getValidatedXml(response);
+  if (!result.validation.valid) {
+    const firstError = result.validation.reason ?? "Неизвестная ошибка BPMN XML.";
+    logValidationFailure(1, firstError);
+    req.log.warn({ model, attempt: 1, validationError: firstError }, "BPMN XML validation failed");
 
-  const xml = extractAssistantXml(payload);
-  if (!xml || !(await isCompleteBpmnXml(xml))) {
-    req.log.warn("OpenRouter response did not contain a complete BPMN XML document");
-    res.status(502).json({ error: "Модель не вернула корректный BPMN XML. Попробуйте повторить запрос." });
-    return;
+    const correctionPrompt = buildBpmnCorrectionPrompt(textPrompt, result.xml, firstError);
+    try {
+      response = await requestModel([
+        { role: "system", content: BPMN_XML_SYSTEM_PROMPT },
+        { role: "user", content: correctionPrompt },
+      ], "self-correction");
+    } catch (error) {
+      req.log.warn(
+        {
+          model,
+          error: error instanceof Error ? error.message : "network request failed",
+        },
+        "OpenRouter self-correction request failed after retry attempts",
+      );
+      res.status(503).json({
+        error: "OpenRouter не ответил на автоматическую попытку исправления. Повторите запрос позже.",
+      });
+      return;
+    }
+
+    if (!response.ok) {
+      sendProviderError(response);
+      return;
+    }
+
+    result = await getValidatedXml(response);
+    if (!result.validation.valid) {
+      const secondError = result.validation.reason ?? "Неизвестная ошибка BPMN XML.";
+      logValidationFailure(2, secondError);
+      req.log.warn({ model, attempt: 2, validationError: secondError }, "BPMN XML self-correction failed");
+      res.status(502).json({
+        error: `Модель не вернула корректный BPMN XML даже после автоматического исправления. Причина: ${secondError}`,
+      });
+      return;
+    }
   }
 
   if (!(await consumeBPMNGeneration(req))) {
@@ -116,7 +182,7 @@ router.post("/bpmn/generate", checkBPMNLimits, async (req, res): Promise<void> =
     return;
   }
 
-  res.type("application/xml").send(xml);
+  res.type("application/xml").send(result.xml);
 });
 
 export default router;
