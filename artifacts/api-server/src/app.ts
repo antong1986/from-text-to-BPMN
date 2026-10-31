@@ -4,6 +4,7 @@ import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { configureAuth } from "./lib/auth";
+import { getCorsAllowedOrigins } from "./lib/cross-origin-auth";
 
 const app: Express = express();
 app.set("trust proxy", true);
@@ -27,12 +28,7 @@ app.use(
     },
   }),
 );
-const allowedOrigins = [process.env.CORS_ORIGIN, process.env.FRONTEND_URL]
-  .filter(Boolean)
-  .join(",")
-  .split(',')
-  .map((origin) => origin.trim())
-  .filter(Boolean);
+const allowedOrigins = getCorsAllowedOrigins();
 app.use(cors({
   origin(origin, callback) {
     if (

@@ -53,6 +53,12 @@ function refinementErrorMessage(error: unknown, language: Language): string {
 
 const DESCRIPTION_DRAFT_KEY = 'text-to-bpmn-description-draft';
 
+function getApiUrl(path: string): string {
+  const apiBaseUrl = import.meta.env.VITE_API_URL?.trim().replace(/\/+$/, "");
+  if (!apiBaseUrl) return path;
+  return `${apiBaseUrl}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
 function readDescriptionDraft(): string {
   try {
     return typeof window === 'undefined'
@@ -132,7 +138,7 @@ function StudioApp(){
 
   const refreshAuth=useCallback(async()=>{
     try{
-      const response=await fetch('/api/auth/me',{credentials:'same-origin'});
+      const response=await fetch(getApiUrl('/api/auth/me'),{credentials:'include'});
       const status=await response.json() as AuthStatus;
       setAuthStatus(response.ok?status:{authenticated:false});
     }catch{
@@ -140,7 +146,7 @@ function StudioApp(){
     }
   },[]);
   const handleLogout=async()=>{
-    try{await fetch('/api/auth/logout',{method:'POST',credentials:'same-origin'});}
+    try{await fetch(getApiUrl('/api/auth/logout'),{method:'POST',credentials:'include'});}
     finally{await refreshAuth();}
   };
 
@@ -187,9 +193,9 @@ function StudioApp(){
     setIsReplyPending(false);
     setIsGenerating(true);setAiError('');setChatMessages([]);setRollbackSnapshot(null);
     try{
-      const response=await fetch('/api/bpmn/generate',{
+      const response=await fetch(getApiUrl('/api/bpmn/generate'),{
         method:'POST',
-        credentials:'same-origin',
+        credentials:'include',
         headers:{'Content-Type':'application/json','Accept':'application/xml, application/json'},
         body:JSON.stringify({textPrompt:description}),
       });

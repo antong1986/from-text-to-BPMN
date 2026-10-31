@@ -9,6 +9,7 @@ import { isDeveloperEmail } from "./developer-email";
 import { getSafeReturnTo } from "./auth-redirect";
 import { logger } from "./logger";
 import { getGoogleCallbackUrl } from "./oauth-config";
+import { getSessionCookieOptions } from "./cross-origin-auth";
 
 export { getSafeReturnTo } from "./auth-redirect";
 
@@ -19,9 +20,6 @@ const isProduction = process.env.NODE_ENV === "production";
 if (isProduction && !sessionSecret) {
   throw new Error("SESSION_SECRET must be configured before starting the API server.");
 }
-
-const sessionCookieSameSite =
-  process.env.SESSION_COOKIE_SAME_SITE === "none" ? "none" : "lax";
 
 function mapUser(row: Record<string, unknown>): AppUser {
   return {
@@ -124,9 +122,7 @@ export function configureAuth(app: Express): void {
       saveUninitialized: false,
       cookie: {
         httpOnly: true,
-        secure: isProduction || sessionCookieSameSite === "none",
-        sameSite: sessionCookieSameSite,
-        maxAge: 7 * 24 * 60 * 60 * 1000,
+        ...getSessionCookieOptions(),
       },
     }),
   );
