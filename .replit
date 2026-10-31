@@ -25,4 +25,4 @@ channel = "stable-25_05"
 [userenv]
 
 [userenv.shared]
-MY_DEVELOPER_EMAIL = "antong8649@gmail.com"
+MY_DEVELOPER_EMAIL = "antong8649@gmail.com, barieva89@gmail.com"

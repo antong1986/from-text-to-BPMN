@@ -5,6 +5,7 @@ import { pool } from "@workspace/db";
 import passport from "passport";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import type { AppUser } from "../types/app-user";
+import { isDeveloperEmail } from "./developer-email";
 import { logger } from "./logger";
 
 const PgSessionStore = connectPgSimple(session);
@@ -60,8 +61,7 @@ async function findOrCreateGoogleUser(
   googleId: string,
   email: string,
 ): Promise<AppUser> {
-  const developerEmail = process.env.MY_DEVELOPER_EMAIL?.trim().toLowerCase();
-  const isDeveloper = Boolean(developerEmail && email.toLowerCase() === developerEmail);
+  const isDeveloper = isDeveloperEmail(email);
   const result = await pool.query(
     `INSERT INTO users (email, google_id, is_whitelisted)
      VALUES ($1, $2, $3)
