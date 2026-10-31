@@ -392,7 +392,16 @@ function StudioApp(){
             {signedInUser?<>
               <div className="auth-summary">
                 <span className="auth-email" title={signedInUser.email}>{signedInUser.email}</span>
-                <span className="auth-quota">{signedInUser.isWhitelisted?copy.unlimitedAccess:signedInUser.hasActivePremium?copy.unlimited:copy.freeQuota(signedInUser.freeGenerationsLeft??0)}</span>
+                <span
+                  className={`auth-quota${signedInUser.isWhitelisted === true ? ' admin-unlimited' : ''}`}
+                  data-testid="status-user-quota"
+                >
+                  {signedInUser.isWhitelisted === true
+                    ? copy.adminUnlimited
+                    : signedInUser.hasActivePremium
+                      ? copy.unlimited
+                      : copy.freeQuota(signedInUser.freeGenerationsLeft ?? 0)}
+                </span>
               </div>
               <button type="button" className="auth-action" onClick={()=>void handleLogout()}>{copy.logout}</button>
             </>:<>

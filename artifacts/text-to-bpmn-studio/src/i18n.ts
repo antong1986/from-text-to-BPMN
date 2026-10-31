@@ -48,7 +48,7 @@ export interface StudioCopy {
   canvasSummary: (nodes: number, flows: number) => string;
   databaseButton: string;
   validatorTooltip: string;
-  unlimitedAccess: string;
+  adminUnlimited: string;
   unlimited: string;
   freeQuota: (count: number) => string;
   logout: string;
@@ -152,7 +152,7 @@ const english: StudioCopy = {
   canvasSummary: (nodes, flows) => `${nodes} elements · ${flows} flows`,
   databaseButton: 'Database schema',
   validatorTooltip: 'Answer the AI validator’s question to confirm the process logic, or finish the scenario manually',
-  unlimitedAccess: 'Unlimited access',
+  adminUnlimited: 'Admin / Unlimited',
   unlimited: 'Unlimited',
   freeQuota: (count) => `Free: ${count}`,
   logout: 'Sign out',
@@ -256,7 +256,7 @@ const russian: StudioCopy = {
   canvasSummary: (nodes, flows) => `${nodes} элементов · ${flows} потоков`,
   databaseButton: 'Схема БД',
   validatorTooltip: 'Ответьте на вопрос ИИ-валидатора, чтобы подтвердить логику процесса или завершите сценарий вручную',
-  unlimitedAccess: 'Безлимитный доступ',
+  adminUnlimited: 'Разработчик / Безлимит',
   unlimited: 'Безлимит',
   freeQuota: (count) => `Бесплатно: ${count}`,
   logout: 'Выйти',
