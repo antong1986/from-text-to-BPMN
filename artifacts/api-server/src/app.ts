@@ -45,6 +45,20 @@ app.use(cors({
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true }));
 
+app.get("/", (_req, res) => {
+  res.type("html").send(`<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="google-site-verification" content="5WV2E2zk-L1P_yBloFSUHpQ3G1Fzd7bY4GbLvW4Hco8" />
+    <title>Text-to-BPMN API</title>
+  </head>
+  <body>
+    <main><h1>Text-to-BPMN API</h1></main>
+  </body>
+</html>`);
+});
+
 configureAuth(app);
 app.use("/api", router);
 
