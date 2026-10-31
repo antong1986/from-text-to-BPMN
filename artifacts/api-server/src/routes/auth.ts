@@ -75,6 +75,8 @@ router.get("/auth/google/callback", (req, res, next) => {
 });
 
 router.get("/auth/me", (req, res) => {
+  res.setHeader("Cache-Control", "no-store, private");
+
   if (!req.isAuthenticated?.() || !req.user) {
     res.json({ authenticated: false });
     return;

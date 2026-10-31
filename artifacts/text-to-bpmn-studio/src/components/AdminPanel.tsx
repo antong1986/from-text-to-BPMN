@@ -135,6 +135,7 @@ async function adminFetch<T>(url: string, init?: RequestInit): Promise<T> {
     : url;
   const response = await fetch(requestUrl, {
     ...init,
+    cache: "no-store",
     credentials: "include",
     headers: { "Content-Type": "application/json", ...init?.headers },
   });

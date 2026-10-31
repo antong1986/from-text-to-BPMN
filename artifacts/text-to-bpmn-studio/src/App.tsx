@@ -138,7 +138,7 @@ function StudioApp(){
 
   const refreshAuth=useCallback(async()=>{
     try{
-      const response=await fetch(getApiUrl('/api/auth/me'),{credentials:'include'});
+      const response=await fetch(getApiUrl('/api/auth/me'),{credentials:'include',cache:'no-store'});
       const status=await response.json() as AuthStatus;
       setAuthStatus(response.ok?status:{authenticated:false});
     }catch{
