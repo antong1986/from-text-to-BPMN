@@ -73,6 +73,15 @@ function saveDescriptionDraft(value: string): void {
   }
 }
 
+function getGoogleLoginHref(): string {
+  const apiBaseUrl = import.meta.env.VITE_API_URL?.trim().replace(/\/+$/, "");
+  if (!apiBaseUrl) return "/api/auth/google?next=%2F";
+
+  const loginUrl = new URL("/api/auth/google", apiBaseUrl);
+  loginUrl.searchParams.set("next", `${window.location.origin}/`);
+  return loginUrl.toString();
+}
+
 function StudioApp(){
   const [language,setLanguage]=useState<Language>(getInitialLanguage);
   const copy=getUiText(language);
@@ -382,7 +391,7 @@ function StudioApp(){
               <button type="button" className="auth-action" onClick={()=>void handleLogout()}>{copy.logout}</button>
             </>:<>
               <span className="auth-prompt" title={copy.authPrompt}>{authStatus===null?copy.authChecking:copy.authPrompt}</span>
-              <a className="auth-action" href="/api/auth/google?next=%2F" onClick={()=>saveDescriptionDraft(userInput)}>{copy.loginWithGoogle}</a>
+              <a className="auth-action" href={getGoogleLoginHref()} onClick={()=>saveDescriptionDraft(userInput)}>{copy.loginWithGoogle}</a>
             </>}
           </div>
         </div>

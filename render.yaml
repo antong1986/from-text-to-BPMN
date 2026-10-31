@@ -18,3 +18,15 @@ services:
         sync: false
       - key: ADMIN_SYNC_TOKEN
         sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: SESSION_SECRET
+        sync: false
+      - key: GOOGLE_CALLBACK_URL
+        value: https://from-text-to-bpmn-api.onrender.com/api/auth/google/callback
+      - key: FRONTEND_URL
+        value: https://from-text-to-bpmn.vercel.app
+      - key: SESSION_COOKIE_SAME_SITE
+        value: none
