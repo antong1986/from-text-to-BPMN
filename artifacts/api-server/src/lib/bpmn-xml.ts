@@ -71,6 +71,18 @@ export async function validateBpmnXml(xml: string): Promise<BpmnXmlValidationRes
   const flowNodes = flowElements.filter((element) =>
     element.$type !== "bpmn:SequenceFlow",
   );
+  const allowedTaskTypes = new Set(["bpmn:UserTask", "bpmn:ServiceTask"]);
+  const unclassifiedTask = flowNodes.find((element) => {
+    const type = element.$type;
+    return typeof type === "string" &&
+      type.endsWith("Task") &&
+      !allowedTaskTypes.has(type);
+  });
+  if (unclassifiedTask) {
+    return invalid(
+      `Задача "${unclassifiedTask.id ?? "(без id)"}" имеет тип ${unclassifiedTask.$type}; допустимы только bpmn:UserTask и bpmn:ServiceTask.`,
+    );
+  }
   if (flowNodes.length <= 1) {
     return invalid("В bpmn:Process должно быть больше одного узла.");
   }

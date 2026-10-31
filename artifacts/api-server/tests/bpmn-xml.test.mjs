@@ -15,7 +15,7 @@ const validXml = `<bpmn:definitions
   id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
   <bpmn:process id="Process_1" isExecutable="false">
     <bpmn:startEvent id="Start_1" name="Start" />
-    <bpmn:task id="Task_1" name="Review request" />
+    <bpmn:userTask id="Task_1" name="Review request" />
     <bpmn:endEvent id="End_1" name="Done" />
     <bpmn:sequenceFlow id="Flow_1" sourceRef="Start_1" targetRef="Task_1" />
     <bpmn:sequenceFlow id="Flow_2" sourceRef="Task_1" targetRef="End_1" />
@@ -41,6 +41,28 @@ test("cleans markdown fences, introductory text, and trailing commentary", () =>
 test("accepts a BPMN document with valid nodes, references, shapes, and edges", async () => {
   assert.equal(await isCompleteBpmnXml(validXml), true);
   assert.deepEqual(await validateBpmnXml(validXml), { valid: true, reason: null });
+});
+
+test("accepts user and service tasks but rejects generic task types", async () => {
+  const serviceTask = validXml.replace("<bpmn:userTask ", "<bpmn:serviceTask ").replace(
+    "</bpmn:userTask>",
+    "</bpmn:serviceTask>",
+  );
+  assert.equal((await validateBpmnXml(serviceTask)).valid, true);
+
+  const genericTask = validXml.replace("<bpmn:userTask ", "<bpmn:task ").replace(
+    "</bpmn:userTask>",
+    "</bpmn:task>",
+  );
+  const result = await validateBpmnXml(genericTask);
+  assert.equal(result.valid, false);
+  assert.match(result.reason, /допустимы только bpmn:UserTask и bpmn:ServiceTask/);
+
+  const manualTask = validXml.replace("<bpmn:userTask ", "<bpmn:manualTask ").replace(
+    "</bpmn:userTask>",
+    "</bpmn:manualTask>",
+  );
+  assert.equal((await validateBpmnXml(manualTask)).valid, false);
 });
 
 test("reports unresolved flow references and missing shapes", async () => {
