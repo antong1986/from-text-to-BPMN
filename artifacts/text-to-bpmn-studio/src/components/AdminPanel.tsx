@@ -8,7 +8,7 @@ function getAdminGoogleLoginHref(): string {
   const loginUrl = ADMIN_API_BASE_URL
     ? new URL("/api/auth/google", ADMIN_API_BASE_URL)
     : new URL("/api/auth/google", window.location.origin);
-  loginUrl.searchParams.set("next", `${window.location.origin}/admin-panel`);
+  loginUrl.searchParams.set("next", "/admin-panel");
   return loginUrl.toString();
 }
 
