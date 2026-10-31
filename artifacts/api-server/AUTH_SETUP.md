@@ -9,13 +9,15 @@ Configure credentials in Replit Secrets, not in a committed `.env` file:
   OAuth 2.0 Web application.
 - `OPENROUTER_API_KEY` — key used by the BPMN XML generation route.
 
+The BPMN generation route uses the fixed OpenRouter model
+`google/gemini-2.5-flash` (without a `:free` suffix).
+
 Optional configuration:
 
 - `MY_DEVELOPER_EMAIL` — verified Google email that receives permanent
   whitelist access.
 - `GOOGLE_CALLBACK_URL` — overrides the callback URI derived from the Replit
   domain. Register the exact value in the Google OAuth client.
-- `OPENROUTER_MODEL` — defaults to `openrouter/free`, which routes to an available free model.
 - `FRONTEND_URL` and `CORS_ORIGIN` — frontend origin(s), comma-separated for
   `CORS_ORIGIN`, when the frontend is hosted separately.
 - `SESSION_COOKIE_SAME_SITE=none` — use only for a cross-site frontend/API

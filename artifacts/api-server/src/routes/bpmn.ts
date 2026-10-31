@@ -5,7 +5,7 @@ import { fetchWithRetry } from "../lib/fetch-with-retry";
 
 const router: IRouter = Router();
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
-const OPENROUTER_MODEL = "openrouter/free";
+const OPENROUTER_MODEL = "google/gemini-2.5-flash";
 const MAX_PROMPT_LENGTH = 60_000;
 
 const BPMN_XML_SYSTEM_PROMPT = `Ты — эксперт по BPMN 2.0 и компилятор описаний процессов в BPMN XML для bpmn-js.
@@ -42,7 +42,7 @@ router.post("/bpmn/generate", checkBPMNLimits, async (req, res): Promise<void> =
   }
 
   let response: Response;
-  const model = process.env.OPENROUTER_MODEL || OPENROUTER_MODEL;
+  const model = OPENROUTER_MODEL;
   try {
     response = await fetchWithRetry(`${OPENROUTER_BASE_URL}/chat/completions`, {
       method: "POST",
