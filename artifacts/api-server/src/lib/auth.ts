@@ -41,7 +41,22 @@ export async function findUserById(id: number): Promise<AppUser | null> {
      FROM users WHERE id = $1 LIMIT 1`,
     [id],
   );
-  return result.rows[0] ? mapUser(result.rows[0] as Record<string, unknown>) : null;
+  if (!result.rows[0]) return null;
+
+  const user = mapUser(result.rows[0] as Record<string, unknown>);
+  if (user.isWhitelisted || !isDeveloperEmail(user.email)) return user;
+
+  const promoted = await pool.query(
+    `UPDATE users SET is_whitelisted = true
+     WHERE id = $1
+     RETURNING id, email, google_id AS "googleId", is_premium AS "isPremium",
+               free_generations_left AS "freeGenerationsLeft",
+               premium_until AS "premiumUntil", is_whitelisted AS "isWhitelisted"`,
+    [user.id],
+  );
+  return promoted.rows[0]
+    ? mapUser(promoted.rows[0] as Record<string, unknown>)
+    : user;
 }
 
 async function findOrCreateGoogleUser(
