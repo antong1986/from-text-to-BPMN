@@ -2,6 +2,17 @@ import { setTimeout as delay } from "node:timers/promises";
 
 const TRANSIENT_STATUSES = new Set([429, 500, 502, 503, 504]);
 
+export function isTimeoutError(error: unknown): boolean {
+  if (typeof error === "string") {
+    return /(?:aborted due to timeout|timed?\s*out|timeout)/i.test(error);
+  }
+  if (!error || typeof error !== "object") return false;
+  const maybeError = error as { name?: unknown; message?: unknown };
+  if (maybeError.name === "TimeoutError") return true;
+  return typeof maybeError.message === "string" &&
+    /(?:aborted due to timeout|timed?\s*out|timeout)/i.test(maybeError.message);
+}
+
 export async function fetchWithRetry(
   url: string,
   init: RequestInit,

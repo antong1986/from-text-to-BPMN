@@ -8,12 +8,14 @@ import {
   detectBpmnSourceLanguage,
   validateBpmnXml,
 } from "../lib/bpmn-xml";
-import { fetchWithRetry } from "../lib/fetch-with-retry";
+import { fetchWithRetry, isTimeoutError } from "../lib/fetch-with-retry";
 
 const router: IRouter = Router();
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 const OPENROUTER_MODEL = "google/gemini-2.5-flash";
 const MAX_PROMPT_LENGTH = 60_000;
+const OPENROUTER_ATTEMPT_TIMEOUT_MS = 180_000;
+const OPENROUTER_TOTAL_TIMEOUT_MS = 240_000;
 
 const BPMN_XML_SYSTEM_PROMPT = `Ты — эксперт по BPMN 2.0 и компилятор описаний процессов в BPMN XML для bpmn-js.
 Верни только сырой, полный, корректный, импортируемый XML: первый непустой символ должен начинать тег <bpmn:definitions, а документ должен завершаться </bpmn:definitions>. Не сокращай XML ради экономии токенов и не пропускай узлы, потоки, графические bounds или waypoint. Не добавляй XML-декларацию, markdown, тройные кавычки, пояснения или текст до/после XML.
@@ -91,8 +93,8 @@ router.post("/bpmn/generate", checkBPMNLimits, async (req, res): Promise<void> =
       messages,
     }),
   }, {
-    totalTimeoutMs: 180_000,
-    attemptTimeoutMs: 120_000,
+    totalTimeoutMs: OPENROUTER_TOTAL_TIMEOUT_MS,
+    attemptTimeoutMs: OPENROUTER_ATTEMPT_TIMEOUT_MS,
     initialRetryDelayMs: 5_000,
     maxRetryDelayMs: 30_000,
     onRetry: (attempt, status) => req.log.warn(
@@ -106,17 +108,45 @@ router.post("/bpmn/generate", checkBPMNLimits, async (req, res): Promise<void> =
       const payload: unknown = await response.json();
       const extractedXml = extractAssistantXml(payload) ?? "";
       const xml = await correctStraightMainAxisWaypoints(extractedXml);
-      return { xml, validation: await validateBpmnXml(xml, sourceLanguage) };
+      return {
+        xml,
+        validation: await validateBpmnXml(xml, sourceLanguage),
+        timedOut: false,
+        timeoutError: "",
+      };
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
+      if (isTimeoutError(error)) {
+        return {
+          xml: "",
+          validation: { valid: false, reason: null },
+          timedOut: true,
+          timeoutError: detail,
+        };
+      }
       return {
         xml: "",
         validation: {
           valid: false,
           reason: `Ответ OpenRouter не удалось разобрать как JSON: ${detail.slice(0, 300)}`,
         },
+        timedOut: false,
+        timeoutError: "",
       };
     }
+  };
+
+  const sendTimeoutError = (
+    phase: "initial" | "self-correction",
+    detail: string,
+  ): void => {
+    req.log.warn(
+      { model, phase, timeoutMs: OPENROUTER_ATTEMPT_TIMEOUT_MS, error: detail },
+      "OpenRouter request timed out",
+    );
+    res.status(504).json({
+      error: "Модель не успела вернуть полный ответ. Повторите запрос или сократите описание процесса.",
+    });
   };
 
   const logValidationFailure = (attempt: 1 | 2, reason: string) => {
@@ -144,6 +174,13 @@ router.post("/bpmn/generate", checkBPMNLimits, async (req, res): Promise<void> =
       { role: "user", content: textPrompt },
     ], "initial");
   } catch (error) {
+    if (isTimeoutError(error)) {
+      sendTimeoutError(
+        "initial",
+        error instanceof Error ? error.message : String(error),
+      );
+      return;
+    }
     req.log.warn(
       {
         model,
@@ -163,6 +200,10 @@ router.post("/bpmn/generate", checkBPMNLimits, async (req, res): Promise<void> =
   }
 
   let result = await getValidatedXml(response);
+  if (result.timedOut) {
+    sendTimeoutError("initial", result.timeoutError);
+    return;
+  }
   if (!result.validation.valid) {
     const firstError = result.validation.reason ?? "Неизвестная ошибка BPMN XML.";
     logValidationFailure(1, firstError);
@@ -175,6 +216,13 @@ router.post("/bpmn/generate", checkBPMNLimits, async (req, res): Promise<void> =
         { role: "user", content: correctionPrompt },
       ], "self-correction");
     } catch (error) {
+      if (isTimeoutError(error)) {
+        sendTimeoutError(
+          "self-correction",
+          error instanceof Error ? error.message : String(error),
+        );
+        return;
+      }
       req.log.warn(
         {
           model,
@@ -194,6 +242,10 @@ router.post("/bpmn/generate", checkBPMNLimits, async (req, res): Promise<void> =
     }
 
     result = await getValidatedXml(response);
+    if (result.timedOut) {
+      sendTimeoutError("self-correction", result.timeoutError);
+      return;
+    }
     if (!result.validation.valid) {
       const secondError = result.validation.reason ?? "Неизвестная ошибка BPMN XML.";
       logValidationFailure(2, secondError);

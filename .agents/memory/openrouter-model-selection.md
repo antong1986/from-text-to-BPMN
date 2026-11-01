@@ -7,4 +7,4 @@ Use the exact model ID `google/gemini-2.5-flash` for BPMN generation, without a 
 
 **Why:** The user added OpenRouter balance and explicitly chose the paid Gemini Flash model after repeated limits and malformed responses from free routing.
 
-**How to apply:** Keep the model pinned in the backend unless the user asks to change it. Do not set a fixed `max_tokens` on the full BPMN XML request; allow the provider/model output limit and instruct the model not to omit or shorten XML. Diagnose API-key, quota, or response-format errors without silently switching to a different model.
+**How to apply:** Keep the model pinned in the backend unless the user asks to change it. Do not set a fixed `max_tokens` on the full BPMN XML request; allow the provider/model output limit and instruct the model not to omit or shorten XML. Treat a timeout while reading the response body as a model timeout, not invalid XML, and do not send an empty response into self-correction. Diagnose API-key, quota, or response-format errors without silently switching to a different model.

@@ -1,6 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { fetchWithRetry } from "../src/lib/fetch-with-retry.ts";
+import { fetchWithRetry, isTimeoutError } from "../src/lib/fetch-with-retry.ts";
+
+test("recognizes model response timeouts without classifying JSON errors as timeouts", () => {
+  assert.equal(
+    isTimeoutError(new DOMException("The operation was aborted due to timeout", "AbortError")),
+    true,
+  );
+  assert.equal(isTimeoutError(new DOMException("The operation timed out", "TimeoutError")), true);
+  assert.equal(isTimeoutError(new SyntaxError("Unexpected end of JSON input")), false);
+});
 
 test("retries transient errors without truncating a large request body", async () => {
   const body = JSON.stringify({ description: "Кредитный менеджер проверяет заявку. ".repeat(5000) });
