@@ -223,9 +223,6 @@ export async function correctStraightMainAxisWaypoints(xml: string): Promise<str
       ];
     }
 
-    const edge = flowId ? edgesByFlowId.get(flowId) : undefined;
-    if (!edge) continue;
-
     const currentWaypoints = edge.waypoint ?? [];
     if (
       currentWaypoints.length === nextWaypoints.length &&
