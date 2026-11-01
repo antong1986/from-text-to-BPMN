@@ -60,6 +60,163 @@ export function cleanAssistantXml(value: string): string {
   return cleaned.trim();
 }
 
+const straightMainAxisTaskTypes = new Set(["bpmn:UserTask", "bpmn:ServiceTask"]);
+
+type ShapeBounds = { x: number; y: number; width: number; height: number };
+
+function isStraightMainAxisNodeType(type: string | undefined): boolean {
+  return Boolean(
+    type &&
+      (straightMainAxisTaskTypes.has(type) || type.endsWith("Gateway")),
+  );
+}
+
+/**
+ * Replace model-authored routes for unobstructed, same-row Task/Gateway flows
+ * with a direct boundary-to-boundary segment before strict XML validation.
+ */
+export async function correctStraightMainAxisWaypoints(xml: string): Promise<string> {
+  let rootElement: Awaited<ReturnType<typeof moddle.fromXML>>["rootElement"];
+  try {
+    ({ rootElement } = await moddle.fromXML(xml));
+  } catch {
+    // Preserve malformed XML so validateBpmnXml can return the precise parse
+    // error instead of hiding it behind this best-effort geometry correction.
+    return xml;
+  }
+
+  const process = rootElement.rootElements?.find(
+    (element) => element.$type === "bpmn:Process",
+  );
+  const diagram = rootElement.diagrams?.find(
+    (element) => element.$type === "bpmndi:BPMNDiagram",
+  );
+  const planeElements = diagram?.plane?.planeElement ?? [];
+  if (!process || planeElements.length === 0) return xml;
+
+  const flowElements = process.flowElements ?? [];
+  const nodesById = new Map(
+    flowElements
+      .filter((element) => element.$type !== "bpmn:SequenceFlow" && element.id)
+      .map((element) => [element.id as string, element] as const),
+  );
+  const boundsByNodeId = new Map<string, ShapeBounds>();
+  for (const shape of planeElements.filter(
+    (element) => element.$type === "bpmndi:BPMNShape",
+  )) {
+    const shapeData = shape as unknown as {
+      bpmnElement?: { id?: string };
+      bounds?: ShapeBounds;
+    };
+    if (shapeData.bpmnElement?.id && shapeData.bounds) {
+      boundsByNodeId.set(shapeData.bpmnElement.id, shapeData.bounds);
+    }
+  }
+
+  const edgesByFlowId = new Map<string, {
+    bpmnElement?: { id?: string };
+    waypoint?: Array<{ x: number; y: number }>;
+  }>();
+  for (const element of planeElements.filter(
+    (item) => item.$type === "bpmndi:BPMNEdge",
+  )) {
+    const edge = element as unknown as {
+      bpmnElement?: { id?: string };
+      waypoint?: Array<{ x: number; y: number }>;
+    };
+    if (edge.bpmnElement?.id) {
+      edgesByFlowId.set(edge.bpmnElement.id, edge);
+    }
+  }
+
+  let changed = false;
+  for (const flow of flowElements.filter(
+    (element) => element.$type === "bpmn:SequenceFlow",
+  )) {
+    const sourceId = flow.sourceRef?.id;
+    const targetId = flow.targetRef?.id;
+    const source = sourceId ? nodesById.get(sourceId) : undefined;
+    const target = targetId ? nodesById.get(targetId) : undefined;
+    const sourceType = source?.$type;
+    const targetType = target?.$type;
+    if (
+      !source ||
+      !target ||
+      !sourceType ||
+      !targetType ||
+      !isStraightMainAxisNodeType(sourceType) ||
+      !isStraightMainAxisNodeType(targetType) ||
+      (!straightMainAxisTaskTypes.has(sourceType) &&
+        !straightMainAxisTaskTypes.has(targetType))
+    ) {
+      continue;
+    }
+
+    const sourceBounds = sourceId ? boundsByNodeId.get(sourceId) : undefined;
+    const targetBounds = targetId ? boundsByNodeId.get(targetId) : undefined;
+    const flowId = flow.id;
+    const edge = flowId ? edgesByFlowId.get(flowId) : undefined;
+    if (!sourceBounds || !targetBounds || !edge) continue;
+
+    const sourceCenterY = sourceBounds.y + sourceBounds.height / 2;
+    const targetCenterY = targetBounds.y + targetBounds.height / 2;
+    const startX = sourceBounds.x + sourceBounds.width;
+    const endX = targetBounds.x;
+    if (sourceCenterY !== targetCenterY || startX >= endX) continue;
+
+    // A straight route is only safe when the open corridor contains no
+    // unrelated BPMNShape. Obstructed routes remain for the normal validator
+    // and model self-correction instead of being forced through a node.
+    const corridorBlocked = [...boundsByNodeId].some(([nodeId, bounds]) => {
+      if (nodeId === sourceId || nodeId === targetId) return false;
+      const right = bounds.x + bounds.width;
+      const bottom = bounds.y + bounds.height;
+      return sourceCenterY >= bounds.y &&
+        sourceCenterY <= bottom &&
+        Math.max(startX, bounds.x) <= Math.min(endX, right);
+    });
+    if (corridorBlocked) continue;
+
+    const nextWaypoints = [
+      { x: startX, y: sourceCenterY },
+      { x: endX, y: targetCenterY },
+    ];
+    const currentWaypoints = edge.waypoint ?? [];
+    if (
+      currentWaypoints.length === nextWaypoints.length &&
+      currentWaypoints.every(
+        (point, index) =>
+          point.x === nextWaypoints[index].x &&
+          point.y === nextWaypoints[index].y,
+      )
+    ) {
+      continue;
+    }
+
+    const mutableModdle = moddle as unknown as {
+      create(type: string, properties: { x: number; y: number }): unknown;
+    };
+    edge.waypoint = nextWaypoints.map((point) =>
+      mutableModdle.create("dc:Point", point),
+    ) as Array<{ x: number; y: number }>;
+    changed = true;
+  }
+
+  if (!changed) return xml;
+  const mutableModdle = moddle as unknown as {
+    toXML(
+      element: unknown,
+      options: { format: boolean },
+    ): Promise<{ xml: string }>;
+  };
+  try {
+    const serializedXml = (await mutableModdle.toXML(rootElement, { format: true })).xml;
+    return cleanAssistantXml(serializedXml);
+  } catch {
+    return xml;
+  }
+}
+
 export interface BpmnXmlValidationResult {
   valid: boolean;
   reason: string | null;

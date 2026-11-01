@@ -1,9 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { BpmnModdle } from "bpmn-moddle";
 import {
   buildBpmnSourceLanguageInstruction,
   buildBpmnCorrectionPrompt,
   cleanAssistantXml,
+  correctStraightMainAxisWaypoints,
   detectBpmnSourceLanguage,
   hasBpmnLabelsInWrongLanguage,
   isCompleteBpmnXml,
@@ -34,6 +36,65 @@ const validXml = `<bpmn:definitions
     </bpmndi:BPMNPlane>
   </bpmndi:BPMNDiagram>
 </bpmn:definitions>`;
+
+function straightMainAxisPairXml(sourceType, targetType, { obstacle = false } = {}) {
+  const sourceIsGateway = sourceType.endsWith("Gateway");
+  const targetIsGateway = targetType.endsWith("Gateway");
+  const sourceBounds = {
+    x: 180,
+    y: sourceIsGateway ? 94 : 80,
+    width: sourceIsGateway ? 50 : 110,
+    height: sourceIsGateway ? 50 : 78,
+  };
+  const sourceRight = sourceBounds.x + sourceBounds.width;
+  const targetBounds = {
+    x: sourceRight + 80,
+    y: targetIsGateway ? 94 : 80,
+    width: targetIsGateway ? 50 : 110,
+    height: targetIsGateway ? 50 : 78,
+  };
+  const centerY = 119;
+  const targetRight = targetBounds.x + targetBounds.width;
+  const endX = targetRight + 50;
+  const obstacleXml = obstacle
+    ? '<bpmn:exclusiveGateway id="Gateway_Block" name="Block" />'
+    : "";
+  const obstacleShape = obstacle
+    ? '<bpmndi:BPMNShape id="Gateway_Block_di" bpmnElement="Gateway_Block"><dc:Bounds x="' +
+      (sourceRight + 10) +
+      '" y="94" width="40" height="50" /></bpmndi:BPMNShape>'
+    : "";
+
+  return `<bpmn:definitions
+  xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+  id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_1" isExecutable="false">
+    <bpmn:startEvent id="Start_1" name="Start" />
+    <bpmn:${sourceType} id="Source_1" name="Source" />
+    ${obstacleXml}
+    <bpmn:${targetType} id="Target_1" name="Target" />
+    <bpmn:endEvent id="End_1" name="Done" />
+    <bpmn:sequenceFlow id="Flow_Start" sourceRef="Start_1" targetRef="Source_1" />
+    <bpmn:sequenceFlow id="Flow_Direct" sourceRef="Source_1" targetRef="Target_1" />
+    <bpmn:sequenceFlow id="Flow_End" sourceRef="Target_1" targetRef="End_1" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="Diagram_1">
+    <bpmndi:BPMNPlane id="Plane_1" bpmnElement="Process_1">
+      <bpmndi:BPMNShape id="Start_1_di" bpmnElement="Start_1"><dc:Bounds x="100" y="101" width="36" height="36" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Source_1_di" bpmnElement="Source_1"><dc:Bounds x="${sourceBounds.x}" y="${sourceBounds.y}" width="${sourceBounds.width}" height="${sourceBounds.height}" /></bpmndi:BPMNShape>
+      ${obstacleShape}
+      <bpmndi:BPMNShape id="Target_1_di" bpmnElement="Target_1"><dc:Bounds x="${targetBounds.x}" y="${targetBounds.y}" width="${targetBounds.width}" height="${targetBounds.height}" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="End_1_di" bpmnElement="End_1"><dc:Bounds x="${endX}" y="101" width="36" height="36" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_Start_di" bpmnElement="Flow_Start"><di:waypoint x="136" y="${centerY}" /><di:waypoint x="${sourceBounds.x}" y="${centerY}" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Direct_di" bpmnElement="Flow_Direct"><di:waypoint x="${sourceRight + 5}" y="${centerY}" /><di:waypoint x="${targetBounds.x - 5}" y="${centerY}" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_End_di" bpmnElement="Flow_End"><di:waypoint x="${targetRight}" y="${centerY}" /><di:waypoint x="${endX}" y="${centerY}" /></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>`;
+}
 
 test("cleans markdown fences, introductory text, and trailing commentary", () => {
   assert.equal(
@@ -146,6 +207,46 @@ test("accepts an orthogonal route that exits the source through its bottom bound
       '<di:waypoint x="180" y="119" />',
   );
   assert.deepEqual(await validateBpmnXml(verticalExit), { valid: true, reason: null });
+});
+
+test("corrects unobstructed main-axis Task/Gateway flows to two boundary waypoints", async () => {
+  const moddle = new BpmnModdle();
+  const pairs = [
+    ["userTask", "serviceTask"],
+    ["userTask", "exclusiveGateway"],
+    ["exclusiveGateway", "serviceTask"],
+  ];
+
+  for (const [sourceType, targetType] of pairs) {
+    const corrected = await correctStraightMainAxisWaypoints(
+      straightMainAxisPairXml(sourceType, targetType),
+    );
+    const { rootElement } = await moddle.fromXML(corrected);
+    const process = rootElement.rootElements.find((element) => element.$type === "bpmn:Process");
+    const diagram = rootElement.diagrams.find((element) => element.$type === "bpmndi:BPMNDiagram");
+    const edge = diagram.plane.planeElement.find(
+      (element) => element.$type === "bpmndi:BPMNEdge" &&
+        element.bpmnElement?.id === "Flow_Direct",
+    );
+
+    assert.deepEqual(
+      edge.waypoint.map(({ x, y }) => ({ x, y })),
+      [
+        { x: 180 + (sourceType.endsWith("Gateway") ? 50 : 110), y: 119 },
+        {
+          x: 180 + (sourceType.endsWith("Gateway") ? 50 : 110) + 80,
+          y: 119,
+        },
+      ],
+      `${sourceType} -> ${targetType}`,
+    );
+    assert.deepEqual(await validateBpmnXml(corrected), { valid: true, reason: null });
+  }
+});
+
+test("does not force a straight route through an intervening BPMNShape", async () => {
+  const xml = straightMainAxisPairXml("userTask", "serviceTask", { obstacle: true });
+  assert.equal(await correctStraightMainAxisWaypoints(xml), xml);
 });
 
 test("validates generated gateway branch spacing and geometry", async () => {

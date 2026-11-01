@@ -4,6 +4,7 @@ import {
   buildBpmnCorrectionPrompt,
   buildBpmnSourceLanguageInstruction,
   cleanAssistantXml,
+  correctStraightMainAxisWaypoints,
   detectBpmnSourceLanguage,
   validateBpmnXml,
 } from "../lib/bpmn-xml";
@@ -104,7 +105,8 @@ router.post("/bpmn/generate", checkBPMNLimits, async (req, res): Promise<void> =
   const getValidatedXml = async (response: Response) => {
     try {
       const payload: unknown = await response.json();
-      const xml = extractAssistantXml(payload) ?? "";
+      const extractedXml = extractAssistantXml(payload) ?? "";
+      const xml = await correctStraightMainAxisWaypoints(extractedXml);
       return { xml, validation: await validateBpmnXml(xml, sourceLanguage) };
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
