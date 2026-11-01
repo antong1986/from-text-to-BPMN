@@ -233,9 +233,6 @@ export async function validateBpmnXml(
           : `BPMNEdge для sequenceFlow "${flowId}" содержит диагональный сегмент.`);
       }
       const orientation = sameY ? "horizontal" : "vertical";
-      if (index === 1 && orientation !== "horizontal") {
-        return invalid(`BPMNEdge для sequenceFlow "${flowId}" должен выходить из источника горизонтально.`);
-      }
       if (orientation === previousOrientation) {
         return invalid(`BPMNEdge для sequenceFlow "${flowId}" нарушает чередование горизонтальных и вертикальных сегментов.`);
       }

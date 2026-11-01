@@ -138,6 +138,16 @@ test("accepts an orthogonal route that enters an event through its top boundary"
   assert.deepEqual(await validateBpmnXml(eventEntry), { valid: true, reason: null });
 });
 
+test("accepts an orthogonal route that exits the source through its bottom boundary", async () => {
+  const verticalExit = validXml.replace(
+    '<di:waypoint x="136" y="118" /><di:waypoint x="180" y="118" />',
+    '<di:waypoint x="118" y="136" /><di:waypoint x="118" y="200" />' +
+      '<di:waypoint x="150" y="200" /><di:waypoint x="150" y="119" />' +
+      '<di:waypoint x="180" y="119" />',
+  );
+  assert.deepEqual(await validateBpmnXml(verticalExit), { valid: true, reason: null });
+});
+
 test("validates generated gateway branch spacing and geometry", async () => {
   const generated = generateBpmnXmlFromJson({
     nodes: [
