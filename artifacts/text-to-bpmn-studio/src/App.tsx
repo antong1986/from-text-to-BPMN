@@ -244,6 +244,7 @@ function StudioApp(){
       const baselineXml=await flushDiagramXml.current?.()??currentXmlRef.current;
       const baselineModel=extractBpmnXmlModel(baselineXml);
       const baselineGraph=baselineModel.graph;
+      const previousValidatorMessage=[...chatMessages].reverse().find(message=>message.sender==='ai')?.text;
       setGraph(baselineGraph);
       setRollbackSnapshot({
         graph:{nodes:baselineGraph.nodes.map(node=>({...node})),edges:baselineGraph.edges.map(edge=>({...edge}))},
@@ -256,6 +257,7 @@ function StudioApp(){
       const result=await refine.mutateAsync({data:{
         description:userInput.trim(),
         answer,
+        previousValidatorMessage,
         graph:baselineGraph,
       }});
       if(requestId!==replyRequestId.current)return;

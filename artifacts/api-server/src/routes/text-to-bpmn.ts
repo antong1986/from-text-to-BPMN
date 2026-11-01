@@ -342,6 +342,7 @@ router.post("/refine", checkBPMNLimits, async (req, res): Promise<void> => {
         role: "user",
         content: JSON.stringify({
           description: input.data.description.trim(),
+          previousValidatorMessage: input.data.previousValidatorMessage?.trim() || null,
           clarification: input.data.answer.trim(),
           currentGraph: previousGraph,
         }),
@@ -397,6 +398,12 @@ router.post("/refine", checkBPMNLimits, async (req, res): Promise<void> => {
     res.status(422).json({ error: "Уточнение создало некорректные связи. Исходная диаграмма сохранена." });
     return;
   }
+  if (refinementIssue === "invalid-gateway-structure") {
+    res.status(422).json({
+      error: "Уточнение нарушило баланс шлюзов BPMN или слияние альтернативных потоков. Исходная диаграмма сохранена.",
+    });
+    return;
+  }
   if (refinementIssue === "removed-flow") {
     res.status(422).json({
       error: "Уточнение нарушило существующую ветвь процесса. Диаграмма сохранена без изменений.",
@@ -404,9 +411,7 @@ router.post("/refine", checkBPMNLimits, async (req, res): Promise<void> => {
     return;
   }
   if (refinementIssue === "unchanged") {
-    res.status(422).json({
-      error: "Модель не внесла изменение в диаграмму. Попробуйте описать, на каком шаге должна появиться новая ветвь или действие.",
-    });
+    res.json({ ...output.data, message: validatorMessage });
     return;
   }
 

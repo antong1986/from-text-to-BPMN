@@ -38,3 +38,28 @@ test('real malformed JSON, types and dangling links remain explicit errors', () 
   assert.throws(() => parseGeneratedGraph({ nodes: [{ id: 'a', type: 'invalid' }], edges: [] }));
   assert.throws(() => parseGeneratedGraph({ ...pizza, edges: [{ from: 'start', to: 'missing' }] }));
 });
+
+test('parallel gateway subtype survives parsing and XML generation', () => {
+  const graph = parseGeneratedGraph({
+    nodes: [
+      {id:'start',type:'start',name:'Начало'},
+      {id:'split',type:'gateway',gatewayType:'parallel',name:'Разделить поток'},
+      {id:'left',type:'userTask',name:'Левая ветка'},
+      {id:'right',type:'serviceTask',name:'Правая ветка'},
+      {id:'join',type:'gateway',gatewayType:'parallel',name:'Объединить поток'},
+      {id:'end',type:'end',name:'Завершение'},
+    ],
+    edges: [
+      {from:'start',to:'split'},
+      {from:'split',to:'left'},
+      {from:'split',to:'right'},
+      {from:'left',to:'join'},
+      {from:'right',to:'join'},
+      {from:'join',to:'end'},
+    ],
+  });
+  assert.equal(graph.nodes.find(node=>node.id==='split').gatewayType,'parallel');
+  const xml=generateBpmnXmlFromJson(graph);
+  assert.equal((xml.match(/<bpmn:parallelGateway/g)??[]).length,2);
+  assert.equal((xml.match(/<bpmn:exclusiveGateway/g)??[]).length,0);
+});

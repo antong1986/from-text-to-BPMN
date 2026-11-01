@@ -32,6 +32,7 @@ export const GenerateBpmnResponse = zod.object({
   "nodes": zod.array(zod.object({
   "id": zod.string(),
   "type": zod.enum(['start', 'end', 'userTask', 'serviceTask', 'gateway']),
+  "gatewayType": zod.enum(['exclusive', 'parallel']).optional().describe('Gateway semantics for gateway nodes; omitted values default to exclusive.'),
   "name": zod.string()
 })),
   "edges": zod.array(zod.object({
@@ -97,6 +98,7 @@ export const UploadDocumentResponse = zod.object({
   "nodes": zod.array(zod.object({
   "id": zod.string(),
   "type": zod.enum(['start', 'end', 'userTask', 'serviceTask', 'gateway']),
+  "gatewayType": zod.enum(['exclusive', 'parallel']).optional().describe('Gateway semantics for gateway nodes; omitted values default to exclusive.'),
   "name": zod.string()
 })),
   "edges": zod.array(zod.object({
@@ -118,10 +120,12 @@ export const UploadDocumentResponse = zod.object({
 export const RefineBpmnBody = zod.object({
   "description": zod.string().min(1),
   "answer": zod.string().min(1),
+  "previousValidatorMessage": zod.string().optional().describe('The latest validator message that provides context for short answers such as "yes" or "add this".'),
   "graph": zod.object({
   "nodes": zod.array(zod.object({
   "id": zod.string(),
   "type": zod.enum(['start', 'end', 'userTask', 'serviceTask', 'gateway']),
+  "gatewayType": zod.enum(['exclusive', 'parallel']).optional().describe('Gateway semantics for gateway nodes; omitted values default to exclusive.'),
   "name": zod.string()
 })),
   "edges": zod.array(zod.object({
@@ -137,6 +141,7 @@ export const RefineBpmnResponse = zod.object({
   "nodes": zod.array(zod.object({
   "id": zod.string(),
   "type": zod.enum(['start', 'end', 'userTask', 'serviceTask', 'gateway']),
+  "gatewayType": zod.enum(['exclusive', 'parallel']).optional().describe('Gateway semantics for gateway nodes; omitted values default to exclusive.'),
   "name": zod.string()
 })),
   "edges": zod.array(zod.object({
@@ -157,6 +162,7 @@ export const GenerateSpecBody = zod.object({
   "nodes": zod.array(zod.object({
   "id": zod.string(),
   "type": zod.enum(['start', 'end', 'userTask', 'serviceTask', 'gateway']),
+  "gatewayType": zod.enum(['exclusive', 'parallel']).optional().describe('Gateway semantics for gateway nodes; omitted values default to exclusive.'),
   "name": zod.string()
 })),
   "edges": zod.array(zod.object({

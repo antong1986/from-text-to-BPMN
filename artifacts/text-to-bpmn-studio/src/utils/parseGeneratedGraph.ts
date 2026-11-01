@@ -33,8 +33,14 @@ export function parseGeneratedGraph(response: unknown): BpmnGraph {
       throw new Error('Неверный id или тип узла.');
     }
     const type = n.type as BpmnNode['type'];
+    if (type === 'gateway' && n.gatewayType !== undefined &&
+      n.gatewayType !== 'exclusive' && n.gatewayType !== 'parallel') {
+      throw new Error('Неверный тип BPMN-шлюза.');
+    }
     return { id: n.id, type, name: typeof n.name === 'string' && n.name.trim()
-      ? n.name : n.id.trim() || defaultNames[type] };
+      ? n.name : n.id.trim() || defaultNames[type],
+      ...(type === 'gateway' && (n.gatewayType === 'exclusive' || n.gatewayType === 'parallel')
+        ? { gatewayType: n.gatewayType } : {}) };
   });
   const ids = new Set(nodes.map(n => n.id));
   if (!nodes.length || ids.size !== nodes.length) throw new Error('Пустой граф или повторяющиеся id.');

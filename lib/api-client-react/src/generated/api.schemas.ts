@@ -55,9 +55,22 @@ export const BpmnNodeType = {
   gateway: 'gateway',
 } as const;
 
+/**
+ * Gateway semantics for gateway nodes; omitted values default to exclusive.
+ */
+export type BpmnNodeGatewayType = typeof BpmnNodeGatewayType[keyof typeof BpmnNodeGatewayType];
+
+
+export const BpmnNodeGatewayType = {
+  exclusive: 'exclusive',
+  parallel: 'parallel',
+} as const;
+
 export interface BpmnNode {
   id: string;
   type: BpmnNodeType;
+  /** Gateway semantics for gateway nodes; omitted values default to exclusive. */
+  gatewayType?: BpmnNodeGatewayType;
   name: string;
 }
 
@@ -77,6 +90,8 @@ export interface BpmnRefineInput {
   description: string;
   /** @minLength 1 */
   answer: string;
+  /** The latest validator message that provides context for short answers such as "yes" or "add this". */
+  previousValidatorMessage?: string;
   graph: BpmnGraph;
 }
 

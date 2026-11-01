@@ -114,7 +114,10 @@ export function generateBpmnXmlFromJson(
     return `<bpmndi:BPMNEdge id="${edgeIds[i]}_di" bpmnElement="${edgeIds[i]}">${points.map(([x,y]) => `<di:waypoint x="${x}" y="${y}" />`).join('')}</bpmndi:BPMNEdge>`;
   }).join('\n');
   const elementXml = nodes.map((n, i) => {
-    const tag = typeTag[n.type], id = `Node_${i + 1}`, inner = [
+    const tag = n.type === 'gateway'
+      ? n.gatewayType === 'parallel' ? 'parallelGateway' : 'exclusiveGateway'
+      : typeTag[n.type];
+    const id = `Node_${i + 1}`, inner = [
       ...(incoming.get(n.id) ?? []).map(x => `<bpmn:incoming>${x}</bpmn:incoming>`),
       ...(outgoing.get(n.id) ?? []).map(x => `<bpmn:outgoing>${x}</bpmn:outgoing>`),
     ];
@@ -159,6 +162,11 @@ export function extractBpmnXmlModel(xml:string):BpmnXmlModel {
       id,
       type:graphTypeByBpmnElement[element.localName],
       name:element.getAttribute('name')??'',
+      ...(element.localName === 'parallelGateway'
+        ? {gatewayType:'parallel'}
+        : element.localName === 'exclusiveGateway'
+          ? {gatewayType:'exclusive'}
+          : {}),
     });
   });
   const edges:BpmnEdge[]=[];
@@ -209,7 +217,11 @@ export function mergeRefinementGraphs(base:BpmnGraph,refined:BpmnGraph):BpmnGrap
   const refinedById=new Map(refined.nodes.map(node=>[node.id,node]));
   const nodes=base.nodes.map(node=>{
     const refinement=refinedById.get(node.id);
-    return {...node,...(refinement?.name?{name:refinement.name}:{})};
+    return {
+      ...node,
+      ...(refinement?.name?{name:refinement.name}:{}),
+      ...(node.type==='gateway'&&refinement?.gatewayType?{gatewayType:refinement.gatewayType}:{}),
+    };
   });
   const nodeIds=new Set(nodes.map(node=>node.id));
   refined.nodes.filter(node=>!nodeIds.has(node.id)).forEach(node=>nodes.push({...node}));

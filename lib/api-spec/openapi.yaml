@@ -513,6 +513,9 @@ components:
         answer:
           type: string
           minLength: 1
+        previousValidatorMessage:
+          type: string
+          description: The latest validator message that provides context for short answers such as "yes" or "add this".
         graph:
           $ref: "#/components/schemas/BpmnGraph"
       required: [description, answer, graph]
@@ -524,6 +527,10 @@ components:
         type:
           type: string
           enum: [start, end, userTask, serviceTask, gateway]
+        gatewayType:
+          type: string
+          enum: [exclusive, parallel]
+          description: Gateway semantics for gateway nodes; omitted values default to exclusive.
         name:
           type: string
       required: [id, type, name]

@@ -12,5 +12,7 @@ export interface BpmnRefineInput {
   description: string;
   /** @minLength 1 */
   answer: string;
+  /** The latest validator message that provides context for short answers such as "yes" or "add this". */
+  previousValidatorMessage?: string;
   graph: BpmnGraph;
 }

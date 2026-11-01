@@ -5,10 +5,13 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { BpmnNodeGatewayType } from './bpmnNodeGatewayType';
 import type { BpmnNodeType } from './bpmnNodeType';
 
 export interface BpmnNode {
   id: string;
   type: BpmnNodeType;
+  /** Gateway semantics for gateway nodes; omitted values default to exclusive. */
+  gatewayType?: BpmnNodeGatewayType;
   name: string;
 }

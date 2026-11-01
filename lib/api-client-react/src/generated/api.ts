@@ -141,6 +141,12 @@ export function useHealthCheck<TData = Awaited<ReturnType<typeof healthCheck>>, 
   return withQueryKey(query, queryOptions.queryKey);
 }
 
+
+
+
+
+
+
 export const getGenerateBpmnUrl = () => {
 
 
@@ -387,6 +393,12 @@ export function useGetAuthStatus<TData = Awaited<ReturnType<typeof getAuthStatus
 
   return withQueryKey(query, queryOptions.queryKey);
 }
+
+
+
+
+
+
 
 export const getLogoutUserUrl = () => {
 
@@ -784,6 +796,13 @@ export function useGetAdminStats<TData = Awaited<ReturnType<typeof getAdminStats
 
   return withQueryKey(query, queryOptions.queryKey);
 }
+
+
+
+
+
+
+
 export const getGetAdminUsersUrl = (params?: GetAdminUsersParams,) => {
   const normalizedParams = new URLSearchParams();
 
@@ -861,6 +880,11 @@ export function useGetAdminUsers<TData = Awaited<ReturnType<typeof getAdminUsers
 
   return withQueryKey(query, queryOptions.queryKey);
 }
+
+
+
+
+
 
 
 export const getToggleAdminUserWhitelistUrl = (id: number,) => {
@@ -1172,3 +1196,10 @@ export function useGetAdminInternalSnapshot<TData = Awaited<ReturnType<typeof ge
 
   return withQueryKey(query, queryOptions.queryKey);
 }
+
+
+
+
+
+
+

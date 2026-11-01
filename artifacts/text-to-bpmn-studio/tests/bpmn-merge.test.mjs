@@ -87,6 +87,45 @@ test('chat refinement preserves manually added elements and unrelated branches',
   assert.equal(merged.edges.some(edge=>edge.from==='decision'&&edge.to==='finish'&&edge.condition==='Да'),false);
 });
 
+test('chat refinement retains parallel gateway semantics in the merged graph', () => {
+  const base = {
+    nodes:[
+      {id:'start',type:'start',name:'Начало'},
+      {id:'split',type:'gateway',gatewayType:'parallel',name:'Разделить поток'},
+      {id:'task',type:'userTask',name:'Проверить'},
+      {id:'join',type:'gateway',gatewayType:'parallel',name:'Объединить поток'},
+      {id:'end',type:'end',name:'Завершение'},
+    ],
+    edges:[
+      {from:'start',to:'split'},
+      {from:'split',to:'task'},
+      {from:'task',to:'join'},
+      {from:'join',to:'end'},
+    ],
+  };
+  const refined = {
+    nodes:[
+      ...base.nodes,
+      {id:'automatic',type:'serviceTask',name:'Сохранить результат'},
+      {id:'second',type:'userTask',name:'Подтвердить результат'},
+    ],
+    edges:[
+      {from:'start',to:'split'},
+      {from:'split',to:'task'},
+      {from:'split',to:'second'},
+      {from:'task',to:'automatic'},
+      {from:'automatic',to:'join'},
+      {from:'second',to:'join'},
+      {from:'join',to:'end'},
+    ],
+  };
+  const merged=mergeRefinementGraphs(base,refined);
+  assert.deepEqual(
+    merged.nodes.filter(node=>node.gatewayType==='parallel').map(node=>node.id),
+    ['split','join'],
+  );
+});
+
 test('refinement XML generation keeps existing node bounds and avoids overlapping additions', () => {
   const graph = {
     nodes: [
