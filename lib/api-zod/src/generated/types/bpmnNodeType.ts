@@ -12,6 +12,7 @@ export type BpmnNodeType = typeof BpmnNodeType[keyof typeof BpmnNodeType];
 export const BpmnNodeType = {
   start: 'start',
   end: 'end',
+  intermediateEvent: 'intermediateEvent',
   userTask: 'userTask',
   serviceTask: 'serviceTask',
   gateway: 'gateway',

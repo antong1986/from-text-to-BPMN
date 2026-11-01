@@ -50,6 +50,7 @@ export type BpmnNodeType = typeof BpmnNodeType[keyof typeof BpmnNodeType];
 export const BpmnNodeType = {
   start: 'start',
   end: 'end',
+  intermediateEvent: 'intermediateEvent',
   userTask: 'userTask',
   serviceTask: 'serviceTask',
   gateway: 'gateway',
@@ -66,11 +67,24 @@ export const BpmnNodeGatewayType = {
   parallel: 'parallel',
 } as const;
 
+/**
+ * Direction for intermediate events; omitted values default to catch.
+ */
+export type BpmnNodeEventType = typeof BpmnNodeEventType[keyof typeof BpmnNodeEventType];
+
+
+export const BpmnNodeEventType = {
+  catch: 'catch',
+  throw: 'throw',
+} as const;
+
 export interface BpmnNode {
   id: string;
   type: BpmnNodeType;
   /** Gateway semantics for gateway nodes; omitted values default to exclusive. */
   gatewayType?: BpmnNodeGatewayType;
+  /** Direction for intermediate events; omitted values default to catch. */
+  eventType?: BpmnNodeEventType;
   name: string;
 }
 

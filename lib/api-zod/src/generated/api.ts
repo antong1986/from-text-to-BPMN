@@ -31,8 +31,9 @@ export const GenerateBpmnResponse = zod.object({
   "graph": zod.object({
   "nodes": zod.array(zod.object({
   "id": zod.string(),
-  "type": zod.enum(['start', 'end', 'userTask', 'serviceTask', 'gateway']),
+  "type": zod.enum(['start', 'end', 'intermediateEvent', 'userTask', 'serviceTask', 'gateway']),
   "gatewayType": zod.enum(['exclusive', 'parallel']).optional().describe('Gateway semantics for gateway nodes; omitted values default to exclusive.'),
+  "eventType": zod.enum(['catch', 'throw']).optional().describe('Direction for intermediate events; omitted values default to catch.'),
   "name": zod.string()
 })),
   "edges": zod.array(zod.object({
@@ -97,8 +98,9 @@ export const UploadDocumentResponse = zod.object({
   "graph": zod.object({
   "nodes": zod.array(zod.object({
   "id": zod.string(),
-  "type": zod.enum(['start', 'end', 'userTask', 'serviceTask', 'gateway']),
+  "type": zod.enum(['start', 'end', 'intermediateEvent', 'userTask', 'serviceTask', 'gateway']),
   "gatewayType": zod.enum(['exclusive', 'parallel']).optional().describe('Gateway semantics for gateway nodes; omitted values default to exclusive.'),
+  "eventType": zod.enum(['catch', 'throw']).optional().describe('Direction for intermediate events; omitted values default to catch.'),
   "name": zod.string()
 })),
   "edges": zod.array(zod.object({
@@ -124,8 +126,9 @@ export const RefineBpmnBody = zod.object({
   "graph": zod.object({
   "nodes": zod.array(zod.object({
   "id": zod.string(),
-  "type": zod.enum(['start', 'end', 'userTask', 'serviceTask', 'gateway']),
+  "type": zod.enum(['start', 'end', 'intermediateEvent', 'userTask', 'serviceTask', 'gateway']),
   "gatewayType": zod.enum(['exclusive', 'parallel']).optional().describe('Gateway semantics for gateway nodes; omitted values default to exclusive.'),
+  "eventType": zod.enum(['catch', 'throw']).optional().describe('Direction for intermediate events; omitted values default to catch.'),
   "name": zod.string()
 })),
   "edges": zod.array(zod.object({
@@ -140,8 +143,9 @@ export const RefineBpmnResponse = zod.object({
   "graph": zod.object({
   "nodes": zod.array(zod.object({
   "id": zod.string(),
-  "type": zod.enum(['start', 'end', 'userTask', 'serviceTask', 'gateway']),
+  "type": zod.enum(['start', 'end', 'intermediateEvent', 'userTask', 'serviceTask', 'gateway']),
   "gatewayType": zod.enum(['exclusive', 'parallel']).optional().describe('Gateway semantics for gateway nodes; omitted values default to exclusive.'),
+  "eventType": zod.enum(['catch', 'throw']).optional().describe('Direction for intermediate events; omitted values default to catch.'),
   "name": zod.string()
 })),
   "edges": zod.array(zod.object({
@@ -161,8 +165,9 @@ export const GenerateSpecBody = zod.object({
   "graph": zod.object({
   "nodes": zod.array(zod.object({
   "id": zod.string(),
-  "type": zod.enum(['start', 'end', 'userTask', 'serviceTask', 'gateway']),
+  "type": zod.enum(['start', 'end', 'intermediateEvent', 'userTask', 'serviceTask', 'gateway']),
   "gatewayType": zod.enum(['exclusive', 'parallel']).optional().describe('Gateway semantics for gateway nodes; omitted values default to exclusive.'),
+  "eventType": zod.enum(['catch', 'throw']).optional().describe('Direction for intermediate events; omitted values default to catch.'),
   "name": zod.string()
 })),
   "edges": zod.array(zod.object({

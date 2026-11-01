@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { BpmnNodeEventType } from './bpmnNodeEventType';
 import type { BpmnNodeGatewayType } from './bpmnNodeGatewayType';
 import type { BpmnNodeType } from './bpmnNodeType';
 
@@ -13,5 +14,7 @@ export interface BpmnNode {
   type: BpmnNodeType;
   /** Gateway semantics for gateway nodes; omitted values default to exclusive. */
   gatewayType?: BpmnNodeGatewayType;
+  /** Direction for intermediate events; omitted values default to catch. */
+  eventType?: BpmnNodeEventType;
   name: string;
 }

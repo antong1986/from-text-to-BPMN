@@ -7,7 +7,8 @@ const BPMNDI_NS = 'http://www.omg.org/spec/BPMN/20100524/DI';
 const DC_NS = 'http://www.omg.org/spec/DD/20100524/DC';
 const DI_NS = 'http://www.omg.org/spec/DD/20100524/DI';
 const typeTag: Record<BpmnNode['type'], string> = {
-  start: 'startEvent', end: 'endEvent', userTask: 'userTask', serviceTask: 'serviceTask', gateway: 'exclusiveGateway',
+  start: 'startEvent', end: 'endEvent', intermediateEvent:'intermediateCatchEvent',
+  userTask: 'userTask', serviceTask: 'serviceTask', gateway: 'exclusiveGateway',
 };
 const graphTypeByBpmnElement: Record<string,BpmnNode['type']> = {
   startEvent:'start',
@@ -25,12 +26,12 @@ const graphTypeByBpmnElement: Record<string,BpmnNode['type']> = {
   eventBasedGateway:'gateway',
   inclusiveGateway:'gateway',
   complexGateway:'gateway',
-  intermediateThrowEvent:'serviceTask',
-  intermediateCatchEvent:'serviceTask',
+  intermediateThrowEvent:'intermediateEvent',
+  intermediateCatchEvent:'intermediateEvent',
 };
 const fallbackNodeNames:Record<Language,Record<BpmnNode['type'],string>>={
-  en:{start:'Start',end:'End',userTask:'User task',serviceTask:'Service task',gateway:'Gateway'},
-  ru:{start:'Начало',end:'Завершение',userTask:'Действие пользователя',serviceTask:'Автоматическое действие',gateway:'Условие'},
+  en:{start:'Start',end:'End',intermediateEvent:'Intermediate event',userTask:'User task',serviceTask:'Service task',gateway:'Gateway'},
+  ru:{start:'Начало',end:'Завершение',intermediateEvent:'Промежуточное событие',userTask:'Действие пользователя',serviceTask:'Автоматическое действие',gateway:'Условие'},
 };
 const escape = (value: string) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
@@ -116,6 +117,8 @@ export function generateBpmnXmlFromJson(
   const elementXml = nodes.map((n, i) => {
     const tag = n.type === 'gateway'
       ? n.gatewayType === 'parallel' ? 'parallelGateway' : 'exclusiveGateway'
+      : n.type === 'intermediateEvent'
+        ? n.eventType === 'throw' ? 'intermediateThrowEvent' : 'intermediateCatchEvent'
       : typeTag[n.type];
     const id = `Node_${i + 1}`, inner = [
       ...(incoming.get(n.id) ?? []).map(x => `<bpmn:incoming>${x}</bpmn:incoming>`),
@@ -167,6 +170,11 @@ export function extractBpmnXmlModel(xml:string):BpmnXmlModel {
         : element.localName === 'exclusiveGateway'
           ? {gatewayType:'exclusive'}
           : {}),
+      ...(element.localName === 'intermediateThrowEvent'
+        ? {eventType:'throw'}
+        : element.localName === 'intermediateCatchEvent'
+          ? {eventType:'catch'}
+          : {}),
     });
   });
   const edges:BpmnEdge[]=[];
@@ -189,6 +197,56 @@ export function extractBpmnXmlModel(xml:string):BpmnXmlModel {
     if([x,y,width,height].every(Number.isFinite))bounds.set(graphId,{x,y,width,height});
   });
   return {graph:{nodes,edges},nodeXmlIds,edgeXmlIds,bounds};
+}
+
+export function calculateRefinementLayoutOverrides(
+  baseGraph:BpmnGraph,
+  mergedGraph:BpmnGraph,
+  baseBounds:ReadonlyMap<string,NodeBounds>,
+):Map<string,NodeBounds> {
+  const layout=new Map([...baseBounds].map(([id,bounds])=>[id,{...bounds}]));
+  const baseIds=new Set(baseGraph.nodes.map(node=>node.id));
+  const addedIds=new Set(mergedGraph.nodes.filter(node=>!baseIds.has(node.id)).map(node=>node.id));
+  if(!addedIds.size)return layout;
+
+  const outgoing=new Map<string,Array<{from:string;to:string;condition?:string}>>();
+  mergedGraph.edges.forEach(edge=>outgoing.set(edge.from,[...(outgoing.get(edge.from)??[]),edge]));
+  const countAddedNodesOnPath=(current:string,target:string,visiting=new Set<string>()):number|null=>{
+    if(current===target)return 0;
+    if(visiting.has(current))return null;
+    visiting.add(current);
+    let max:number|null=null;
+    for(const edge of outgoing.get(current)??[]) {
+      const next=countAddedNodesOnPath(edge.to,target,visiting);
+      if(next!==null)max=Math.max(max??0,next+(addedIds.has(edge.to)?1:0));
+    }
+    visiting.delete(current);
+    return max;
+  };
+
+  for(const oldEdge of baseGraph.edges) {
+    const directFlowRemains=mergedGraph.edges.some(edge=>
+      edge.from===oldEdge.from&&edge.to===oldEdge.to&&edge.condition===oldEdge.condition,
+    );
+    if(directFlowRemains)continue;
+    const insertions=countAddedNodesOnPath(oldEdge.from,oldEdge.to);
+    const targetBounds=baseBounds.get(oldEdge.to);
+    if(!insertions||!targetBounds)continue;
+
+    const shift=190*insertions;
+    const queue=[oldEdge.to],visited=new Set<string>();
+    while(queue.length) {
+      const current=queue.shift()!;
+      if(visited.has(current))continue;
+      visited.add(current);
+      const bounds=layout.get(current);
+      if(baseIds.has(current)&&bounds&&bounds.x>=targetBounds.x) {
+        layout.set(current,{...bounds,x:bounds.x+shift});
+      }
+      for(const edge of outgoing.get(current)??[])queue.push(edge.to);
+    }
+  }
+  return layout;
 }
 
 export function extractGraphFromXml(xml: string): BpmnGraph {
@@ -221,6 +279,7 @@ export function mergeRefinementGraphs(base:BpmnGraph,refined:BpmnGraph):BpmnGrap
       ...node,
       ...(refinement?.name?{name:refinement.name}:{}),
       ...(node.type==='gateway'&&refinement?.gatewayType?{gatewayType:refinement.gatewayType}:{}),
+      ...(node.type==='intermediateEvent'&&refinement?.eventType?{eventType:refinement.eventType}:{}),
     };
   });
   const nodeIds=new Set(nodes.map(node=>node.id));
@@ -292,6 +351,16 @@ function copyCandidateWaypoints(doc:XMLDocument,target:Element,candidate:Element
   });
 }
 
+function copyCandidateBounds(target:Element,candidate:Element):void {
+  const targetBounds=target.getElementsByTagNameNS(DC_NS,'Bounds')[0];
+  const candidateBounds=candidate.getElementsByTagNameNS(DC_NS,'Bounds')[0];
+  if(!targetBounds||!candidateBounds)return;
+  ['x','y','width','height'].forEach(attribute=>{
+    const value=candidateBounds.getAttribute(attribute);
+    if(value)targetBounds.setAttribute(attribute,value);
+  });
+}
+
 function insertFlowReference(doc:XMLDocument,element:Element,kind:'incoming'|'outgoing',flowId:string):void {
   const reference=doc.createElementNS(BPMN_NS,`bpmn:${kind}`);
   reference.textContent=flowId;
@@ -306,12 +375,13 @@ export function mergeRefinementXml(
   layoutOverrides:ReadonlyMap<string,NodeBounds>=baseModel.bounds,
 ):string {
   const mergedGraph=mergeRefinementGraphs(baseModel.graph,refinedGraph);
+  const refinedLayout=calculateRefinementLayoutOverrides(baseModel.graph,mergedGraph,layoutOverrides);
   const doc=parseXmlDocument(xml);
   const process=Array.from(doc.getElementsByTagNameNS(BPMN_NS,'process'))[0];
   const plane=Array.from(doc.getElementsByTagNameNS(BPMNDI_NS,'BPMNPlane'))[0];
   if(!process||!plane)throw new Error('В XML не найдены элементы процесса или диаграммы BPMN.');
 
-  const candidateDoc=parseXmlDocument(generateBpmnXmlFromJson(mergedGraph,layoutOverrides));
+  const candidateDoc=parseXmlDocument(generateBpmnXmlFromJson(mergedGraph,refinedLayout));
   const candidateProcess=Array.from(candidateDoc.getElementsByTagNameNS(BPMN_NS,'process'))[0];
   const candidatePlane=Array.from(candidateDoc.getElementsByTagNameNS(BPMNDI_NS,'BPMNPlane'))[0];
   if(!candidateProcess||!candidatePlane)throw new Error('Не удалось подготовить XML для уточнения диаграммы.');
@@ -351,6 +421,15 @@ export function mergeRefinementXml(
     }
   });
 
+  mergedGraph.nodes.forEach(node=>{
+    const xmlId=graphToXmlId.get(node.id);
+    const candidateId=candidateNodeXmlIds.get(node.id);
+    if(!xmlId||!candidateId)return;
+    const targetShape=findDiElement(plane,'BPMNShape','bpmnElement',xmlId);
+    const candidateShape=findDiElement(candidatePlane,'BPMNShape','bpmnElement',candidateId);
+    if(targetShape&&candidateShape)copyCandidateBounds(targetShape,candidateShape);
+  });
+
   const candidateFlowIds=new Map(mergedGraph.edges.map((_,index)=>[index,`Flow_${index+1}`]));
   const flowIdsByGraphIndex=new Map<number,string>();
   const managedFlowIds=new Set(baseModel.edgeXmlIds);
@@ -365,12 +444,9 @@ export function mergeRefinementXml(
     flow.setAttribute('targetRef',nextTarget);
     setFlowCondition(flow,nextEdge.condition);
     flowIdsByGraphIndex.set(index,flowId);
-    const changed=!sameEdge(oldEdge,nextEdge);
-    if(changed) {
-      const currentDi=findDiElement(plane,'BPMNEdge','bpmnElement',flowId);
-      const candidateDi=findDiElement(candidatePlane,'BPMNEdge','bpmnElement',candidateFlowIds.get(index)!);
-      if(currentDi&&candidateDi)copyCandidateWaypoints(doc,currentDi,candidateDi);
-    }
+    const currentDi=findDiElement(plane,'BPMNEdge','bpmnElement',flowId);
+    const candidateDi=findDiElement(candidatePlane,'BPMNEdge','bpmnElement',candidateFlowIds.get(index)!);
+    if(currentDi&&candidateDi)copyCandidateWaypoints(doc,currentDi,candidateDi);
   });
 
   mergedGraph.edges.forEach((edge,index)=>{

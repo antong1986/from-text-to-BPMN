@@ -5,6 +5,7 @@ const defaultNames: Record<BpmnNode['type'], string> = {
   end: 'End',
   userTask: 'User task',
   serviceTask: 'Service task',
+  intermediateEvent: 'Intermediate event',
   gateway: 'Gateway',
 };
 
@@ -37,10 +38,16 @@ export function parseGeneratedGraph(response: unknown): BpmnGraph {
       n.gatewayType !== 'exclusive' && n.gatewayType !== 'parallel') {
       throw new Error('Неверный тип BPMN-шлюза.');
     }
+    if (type === 'intermediateEvent' && n.eventType !== undefined &&
+      n.eventType !== 'catch' && n.eventType !== 'throw') {
+      throw new Error('Неверное направление промежуточного BPMN-события.');
+    }
     return { id: n.id, type, name: typeof n.name === 'string' && n.name.trim()
       ? n.name : n.id.trim() || defaultNames[type],
       ...(type === 'gateway' && (n.gatewayType === 'exclusive' || n.gatewayType === 'parallel')
-        ? { gatewayType: n.gatewayType } : {}) };
+        ? { gatewayType: n.gatewayType } : {}),
+      ...(type === 'intermediateEvent' && (n.eventType === 'catch' || n.eventType === 'throw')
+        ? { eventType: n.eventType } : {}) };
   });
   const ids = new Set(nodes.map(n => n.id));
   if (!nodes.length || ids.size !== nodes.length) throw new Error('Пустой граф или повторяющиеся id.');

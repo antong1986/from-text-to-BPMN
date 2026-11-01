@@ -107,3 +107,30 @@ test('rejects alternative flows that connect directly to one task', () => {
   };
   assert.equal(getRefinementIssue(original,graph),'invalid-gateway-structure');
 });
+
+test('rejects task dead ends and nodes that cannot reach a process end', () => {
+  const original = {
+    nodes:[{id:'start',type:'start',name:'Start'},{id:'end',type:'end',name:'End'}],
+    edges:[{from:'start',to:'end'}],
+  };
+  const deadEnd = {
+    nodes:[
+      {id:'start',type:'start',name:'Start'},
+      {id:'task',type:'userTask',name:'Unfinished work'},
+      {id:'end',type:'end',name:'End'},
+    ],
+    edges:[{from:'start',to:'task'},{from:'task',to:'end'}],
+  };
+  assert.equal(getRefinementIssue(original,deadEnd),null);
+  const unfinished = {
+    ...deadEnd,
+    nodes:[...deadEnd.nodes,{id:'unfinished',type:'serviceTask',name:'Unfinished'}],
+    edges:[...deadEnd.edges,{from:'task',to:'unfinished'}],
+  };
+  assert.equal(getRefinementIssue(original,unfinished),'invalid-gateway-structure');
+  const stranded = {
+    ...deadEnd,
+    nodes:[...deadEnd.nodes,{id:'isolated',type:'serviceTask',name:'Disconnected'}],
+  };
+  assert.equal(getRefinementIssue(original,stranded),'invalid-gateway-structure');
+});

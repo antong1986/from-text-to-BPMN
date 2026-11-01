@@ -63,3 +63,17 @@ test('parallel gateway subtype survives parsing and XML generation', () => {
   assert.equal((xml.match(/<bpmn:parallelGateway/g)??[]).length,2);
   assert.equal((xml.match(/<bpmn:exclusiveGateway/g)??[]).length,0);
 });
+
+test('intermediate BPMN events are represented and serialized with their direction', () => {
+  const graph=parseGeneratedGraph({
+    nodes:[
+      {id:'start',type:'start',name:'Start'},
+      {id:'signal',type:'intermediateEvent',eventType:'throw',name:'Send signal'},
+      {id:'end',type:'end',name:'End'},
+    ],
+    edges:[{from:'start',to:'signal'},{from:'signal',to:'end'}],
+  });
+  assert.equal(graph.nodes[1].type,'intermediateEvent');
+  assert.equal(graph.nodes[1].eventType,'throw');
+  assert.match(generateBpmnXmlFromJson(graph),/<bpmn:intermediateThrowEvent/);
+});

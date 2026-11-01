@@ -1,4 +1,4 @@
 - [Verify installed dependencies](dependency-audit-verification.md) — after workspace overrides, confirm resolved installs as well as the lockfile audit.
 - [OpenRouter model selection](openrouter-model-selection.md) — keep BPMN generation pinned to the user's chosen paid Gemini Flash model.
 - [Production hosting](production-hosting.md) — the user identifies the Vercel site as live production; keep its data distinct from Replit preview.
-- [Validator chat language](validator-chat-language.md) — chat messages follow the process description's language, independently of the interface locale.
+- [Validator chat behavior](validator-chat-language.md) — chat follows the source language; short confirmations use the preceding validator message as context.

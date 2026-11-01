@@ -526,11 +526,15 @@ components:
           type: string
         type:
           type: string
-          enum: [start, end, userTask, serviceTask, gateway]
+          enum: [start, end, intermediateEvent, userTask, serviceTask, gateway]
         gatewayType:
           type: string
           enum: [exclusive, parallel]
           description: Gateway semantics for gateway nodes; omitted values default to exclusive.
+        eventType:
+          type: string
+          enum: [catch, throw]
+          description: Direction for intermediate events; omitted values default to catch.
         name:
           type: string
       required: [id, type, name]

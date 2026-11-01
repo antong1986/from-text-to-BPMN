@@ -1,5 +1,11 @@
 export interface RefinementGraph {
-  nodes: Array<{id:string;type:string;name:string;gatewayType?:"exclusive"|"parallel"}>;
+  nodes: Array<{
+    id:string;
+    type:string;
+    name:string;
+    gatewayType?:"exclusive"|"parallel";
+    eventType?:"catch"|"throw";
+  }>;
   edges: Array<{from:string;to:string;condition?:string}>;
 }
 
@@ -8,7 +14,13 @@ export type RefinementIssue = "invalid-graph" | "removed-node" | "removed-flow" 
 function canonicalGraph(graph: RefinementGraph): string {
   return JSON.stringify({
     nodes: [...graph.nodes]
-      .map((node) => ({id:node.id,type:node.type,name:node.name,gatewayType:node.type==="gateway"?(node.gatewayType??"exclusive"):null}))
+      .map((node) => ({
+        id:node.id,
+        type:node.type,
+        name:node.name,
+        gatewayType:node.type==="gateway"?(node.gatewayType??"exclusive"):null,
+        eventType:node.type==="intermediateEvent"?(node.eventType??"catch"):null,
+      }))
       .sort((a,b) => a.id.localeCompare(b.id)),
     edges: [...graph.edges]
       .map((edge) => ({from:edge.from,to:edge.to,condition:edge.condition ?? ""}))
@@ -25,14 +37,48 @@ function hasValidGatewayStructure(graph: RefinementGraph): boolean {
     outgoing.set(edge.from,[...(outgoing.get(edge.from)??[]),edge]);
   });
 
+  const starts=graph.nodes.filter((node)=>node.type==="start");
+  const ends=graph.nodes.filter((node)=>node.type==="end");
+  if(!starts.length||!ends.length)return false;
+
   for (const node of graph.nodes) {
     const inCount = incoming.get(node.id)?.length??0;
     const outCount = outgoing.get(node.id)?.length??0;
+    if(node.type==="start"&&(inCount!==0||outCount===0))return false;
+    if(node.type==="end"&&(inCount===0||outCount!==0))return false;
+    if((node.type==="userTask"||node.type==="serviceTask"||node.type==="intermediateEvent"||node.type==="gateway")&&
+      (inCount===0||outCount===0))return false;
     if ((node.type==="userTask"||node.type==="serviceTask")&&inCount>1) return false;
     if (node.type==="gateway"&&(node.gatewayType??"exclusive")!=="parallel"&&inCount>1&&outCount!==1) return false;
     if (node.type==="gateway"&&(node.gatewayType??"exclusive")==="parallel"&&
       !((inCount===1&&outCount>=2)||(inCount>=2&&outCount===1))) return false;
   }
+
+  const reachableFromStarts=new Set(starts.map((node)=>node.id));
+  const forwardQueue=[...reachableFromStarts];
+  while(forwardQueue.length) {
+    const current=forwardQueue.shift()!;
+    for(const edge of outgoing.get(current)??[]) {
+      if(!reachableFromStarts.has(edge.to)) {
+        reachableFromStarts.add(edge.to);
+        forwardQueue.push(edge.to);
+      }
+    }
+  }
+  if(graph.nodes.some((node)=>!reachableFromStarts.has(node.id)))return false;
+
+  const reachesEnd=new Set(ends.map((node)=>node.id));
+  const reverseQueue=[...reachesEnd];
+  while(reverseQueue.length) {
+    const current=reverseQueue.shift()!;
+    for(const edge of incoming.get(current)??[]) {
+      if(!reachesEnd.has(edge.from)) {
+        reachesEnd.add(edge.from);
+        reverseQueue.push(edge.from);
+      }
+    }
+  }
+  if(graph.nodes.some((node)=>!reachesEnd.has(node.id)))return false;
 
   const parallelSplits = graph.nodes.filter((node) =>
     node.type==="gateway"&&node.gatewayType==="parallel"&&
@@ -98,8 +144,11 @@ export function getRefinementIssue(
     return node.type==="gateway"&&candidate?.type==="gateway"&&
       (candidate.gatewayType??"exclusive")!==(node.gatewayType??"exclusive");
   }))return "invalid-gateway-structure";
-  if(!hasValidGatewayStructure(updated))return "invalid-gateway-structure";
-
+  if(previous.nodes.some((node)=>{
+    const candidate=updatedNodes.get(node.id);
+    return node.type==="intermediateEvent"&&candidate?.type==="intermediateEvent"&&
+      (candidate.eventType??"catch")!==(node.eventType??"catch");
+  }))return "invalid-gateway-structure";
   const flowsFrom = new Map<string, Array<{to:string;condition?:string}>>();
   updated.edges.forEach((edge) => {
     flowsFrom.set(edge.from,[...(flowsFrom.get(edge.from) ?? []),edge]);
@@ -121,6 +170,7 @@ export function getRefinementIssue(
   if (previous.edges.some((edge) => !reaches(edge.from,edge.to,edge.condition))) {
     return "removed-flow";
   }
+  if(!hasValidGatewayStructure(updated))return "invalid-gateway-structure";
 
   return canonicalGraph(previous) === canonicalGraph(updated) ? "unchanged" : null;
 }

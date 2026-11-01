@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  calculateRefinementLayoutOverrides,
   generateBpmnXmlFromJson,
   mergeGraphs,
   mergeRefinementGraphs,
@@ -124,6 +125,38 @@ test('chat refinement retains parallel gateway semantics in the merged graph', (
     merged.nodes.filter(node=>node.gatewayType==='parallel').map(node=>node.id),
     ['split','join'],
   );
+});
+
+test('refinement layout opens a horizontal slot and moves downstream nodes', () => {
+  const base={
+    nodes:[
+      {id:'start',type:'start',name:'Start'},
+      {id:'review',type:'userTask',name:'Review'},
+      {id:'end',type:'end',name:'End'},
+    ],
+    edges:[{from:'start',to:'review'},{from:'review',to:'end'}],
+  };
+  const merged={
+    nodes:[
+      ...base.nodes,
+      {id:'notify',type:'serviceTask',name:'Notify'},
+    ],
+    edges:[
+      {from:'start',to:'notify'},
+      {from:'notify',to:'review'},
+      {from:'review',to:'end'},
+    ],
+  };
+  const originalBounds=new Map([
+    ['start',{x:100,y:100,width:36,height:36}],
+    ['review',{x:290,y:79,width:110,height:78}],
+    ['end',{x:480,y:100,width:36,height:36}],
+  ]);
+  const layout=calculateRefinementLayoutOverrides(base,merged,originalBounds);
+  assert.equal(layout.get('start').x,100);
+  assert.equal(layout.get('review').x,480);
+  assert.equal(layout.get('end').x,670);
+  assert.equal(originalBounds.get('review').x,290);
 });
 
 test('refinement XML generation keeps existing node bounds and avoids overlapping additions', () => {

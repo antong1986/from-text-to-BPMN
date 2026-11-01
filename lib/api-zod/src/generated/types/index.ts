@@ -18,6 +18,7 @@ export * from './bpmnGenerateInput';
 export * from './bpmnGenerateResponse';
 export * from './bpmnGraph';
 export * from './bpmnNode';
+export * from './bpmnNodeEventType';
 export * from './bpmnNodeGatewayType';
 export * from './bpmnNodeType';
 export * from './bpmnRefineInput';

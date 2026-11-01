@@ -474,6 +474,7 @@ const errorPairs: Array<[string, string]> = [
   ['Неверный id или тип узла.', 'Invalid node ID or type.'],
   ['Пустой граф или повторяющиеся id.', 'The graph is empty or contains duplicate IDs.'],
   ['Неверная связь.', 'Invalid connection.'],
+  ['Уточнение нарушило баланс шлюзов BPMN или слияние альтернативных потоков. Исходная диаграмма сохранена.', 'The clarification broke BPMN gateway balance or alternative-flow merging. The original diagram has been preserved.'],
 ];
 
 export function localizeKnownError(message: string, language: Language): string {
