@@ -241,10 +241,6 @@ export async function validateBpmnXml(
       }
       previousOrientation = orientation;
     }
-    if (previousOrientation !== "horizontal") {
-      return invalid(`BPMNEdge для sequenceFlow "${flowId}" должен входить в цель горизонтально.`);
-    }
-
     const sourceId = flow.sourceRef?.id;
     const targetId = flow.targetRef?.id;
     for (const [nodeId, bounds] of shapeBoundsByNodeId) {

@@ -130,6 +130,14 @@ test("rejects BPMNEdge without enough waypoints", async () => {
   assert.match((await validateBpmnXml(missingWaypoints)).reason, /минимум две точки waypoint/);
 });
 
+test("accepts an orthogonal route that enters an event through its top boundary", async () => {
+  const eventEntry = validXml.replace(
+    '<di:waypoint x="290" y="118" /><di:waypoint x="340" y="118" />',
+    '<di:waypoint x="290" y="118" /><di:waypoint x="358" y="118" /><di:waypoint x="358" y="100" />',
+  );
+  assert.deepEqual(await validateBpmnXml(eventEntry), { valid: true, reason: null });
+});
+
 test("validates generated gateway branch spacing and geometry", async () => {
   const generated = generateBpmnXmlFromJson({
     nodes: [
