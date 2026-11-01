@@ -258,8 +258,8 @@ test("routes a blocked main-axis flow around an intervening BPMNShape", async ()
     edge.waypoint.map(({ x, y }) => ({ x, y })),
     [
       { x: 290, y: 119 },
-      { x: 290, y: 56 },
-      { x: 370, y: 56 },
+      { x: 290, y: 70 },
+      { x: 370, y: 70 },
       { x: 370, y: 119 },
     ],
   );

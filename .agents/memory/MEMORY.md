@@ -2,3 +2,4 @@
 - [OpenRouter model selection](openrouter-model-selection.md) — keep BPMN generation pinned to the user's chosen paid Gemini Flash model.
 - [Production hosting](production-hosting.md) — the user identifies the Vercel site as live production; keep its data distinct from Replit preview.
 - [Validator chat behavior](validator-chat-language.md) — chat follows the source language; short confirmations use the preceding validator message as context.
+- [BPMN DI waypoint serialization](bpmn-di-waypoint-serialization.md) — bpmn-moddle uses `dc:Point` for waypoints; normalize serialized XML before strict validation.
