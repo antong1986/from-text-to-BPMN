@@ -65,10 +65,20 @@ const straightMainAxisTaskTypes = new Set(["bpmn:UserTask", "bpmn:ServiceTask"])
 type ShapeBounds = { x: number; y: number; width: number; height: number };
 type BpmnPoint = { x: number; y: number };
 
-function isStraightMainAxisNodeType(type: string | undefined): boolean {
+const gatewayIdentifierPattern = /(?:exclusive|parallel|inclusive)?gateway/i;
+
+function isGatewayNode(type: string | undefined, id: string | undefined): boolean {
+  return gatewayIdentifierPattern.test(type ?? "") ||
+    gatewayIdentifierPattern.test(id ?? "");
+}
+
+function isStraightMainAxisNodeType(
+  type: string | undefined,
+  id: string | undefined,
+): boolean {
   return Boolean(
     type &&
-      (straightMainAxisTaskTypes.has(type) || type.endsWith("Gateway")),
+      (straightMainAxisTaskTypes.has(type) || isGatewayNode(type, id)),
   );
 }
 
@@ -121,16 +131,43 @@ export async function correctStraightMainAxisWaypoints(xml: string): Promise<str
       .map((element) => [element.id as string, element] as const),
   );
   const boundsByNodeId = new Map<string, ShapeBounds>();
+  let changed = false;
   for (const shape of planeElements.filter(
     (element) => element.$type === "bpmndi:BPMNShape",
   )) {
     const shapeData = shape as unknown as {
       bpmnElement?: { id?: string };
-      bounds?: ShapeBounds;
+      bounds?: { x?: number; y?: number; width?: number; height?: number };
     };
-    if (shapeData.bpmnElement?.id && shapeData.bounds) {
-      boundsByNodeId.set(shapeData.bpmnElement.id, shapeData.bounds);
+    const nodeId = shapeData.bpmnElement?.id;
+    const bounds = shapeData.bounds;
+    if (!nodeId || !bounds || !Number.isFinite(bounds.x) || !Number.isFinite(bounds.y)) {
+      continue;
     }
+
+    const isGateway = isGatewayNode(nodesById.get(nodeId)?.$type, nodeId);
+    const width = Number.isFinite(bounds.width) && bounds.width! > 0
+      ? bounds.width!
+      : isGateway
+        ? 50
+        : undefined;
+    const height = Number.isFinite(bounds.height) && bounds.height! > 0
+      ? bounds.height!
+      : isGateway
+        ? 50
+        : undefined;
+    if (width === undefined || height === undefined) continue;
+    if (bounds.width !== width || bounds.height !== height) {
+      bounds.width = width;
+      bounds.height = height;
+      changed = true;
+    }
+    boundsByNodeId.set(nodeId, {
+      x: bounds.x!,
+      y: bounds.y!,
+      width,
+      height,
+    });
   }
 
   const edgesByFlowId = new Map<string, {
@@ -149,7 +186,6 @@ export async function correctStraightMainAxisWaypoints(xml: string): Promise<str
     }
   }
 
-  let changed = false;
   for (const flow of flowElements.filter(
     (element) => element.$type === "bpmn:SequenceFlow",
   )) {
@@ -164,8 +200,8 @@ export async function correctStraightMainAxisWaypoints(xml: string): Promise<str
       !target ||
       !sourceType ||
       !targetType ||
-      !isStraightMainAxisNodeType(sourceType) ||
-      !isStraightMainAxisNodeType(targetType) ||
+      !isStraightMainAxisNodeType(sourceType, sourceId) ||
+      !isStraightMainAxisNodeType(targetType, targetId) ||
       (!straightMainAxisTaskTypes.has(sourceType) &&
         !straightMainAxisTaskTypes.has(targetType))
     ) {

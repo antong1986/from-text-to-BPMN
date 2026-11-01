@@ -37,7 +37,11 @@ const validXml = `<bpmn:definitions
   </bpmndi:BPMNDiagram>
 </bpmn:definitions>`;
 
-function straightMainAxisPairXml(sourceType, targetType, { obstacle = false } = {}) {
+function straightMainAxisPairXml(
+  sourceType,
+  targetType,
+  { obstacle = false, targetId = "Target_1" } = {},
+) {
   const sourceIsGateway = sourceType.endsWith("Gateway");
   const targetIsGateway = targetType.endsWith("Gateway");
   const sourceBounds = {
@@ -75,10 +79,10 @@ function straightMainAxisPairXml(sourceType, targetType, { obstacle = false } = 
     <bpmn:startEvent id="Start_1" name="Start" />
     <bpmn:${sourceType} id="Source_1" name="Source" />
     ${obstacleXml}
-    <bpmn:${targetType} id="Target_1" name="Target" />
+    <bpmn:${targetType} id="${targetId}" name="Target" />
     <bpmn:endEvent id="End_1" name="Done" />
     <bpmn:sequenceFlow id="Flow_Start" sourceRef="Start_1" targetRef="Source_1" />
-    <bpmn:sequenceFlow id="Flow_Direct" sourceRef="Source_1" targetRef="Target_1" />
+    <bpmn:sequenceFlow id="Flow_Direct" sourceRef="Source_1" targetRef="${targetId}" />
     <bpmn:sequenceFlow id="Flow_End" sourceRef="Target_1" targetRef="End_1" />
   </bpmn:process>
   <bpmndi:BPMNDiagram id="Diagram_1">
@@ -86,7 +90,7 @@ function straightMainAxisPairXml(sourceType, targetType, { obstacle = false } = 
       <bpmndi:BPMNShape id="Start_1_di" bpmnElement="Start_1"><dc:Bounds x="100" y="101" width="36" height="36" /></bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Source_1_di" bpmnElement="Source_1"><dc:Bounds x="${sourceBounds.x}" y="${sourceBounds.y}" width="${sourceBounds.width}" height="${sourceBounds.height}" /></bpmndi:BPMNShape>
       ${obstacleShape}
-      <bpmndi:BPMNShape id="Target_1_di" bpmnElement="Target_1"><dc:Bounds x="${targetBounds.x}" y="${targetBounds.y}" width="${targetBounds.width}" height="${targetBounds.height}" /></bpmndi:BPMNShape>
+       <bpmndi:BPMNShape id="Target_1_di" bpmnElement="${targetId}"><dc:Bounds x="${targetBounds.x}" y="${targetBounds.y}" width="${targetBounds.width}" height="${targetBounds.height}" /></bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="End_1_di" bpmnElement="End_1"><dc:Bounds x="${endX}" y="101" width="36" height="36" /></bpmndi:BPMNShape>
       <bpmndi:BPMNEdge id="Flow_Start_di" bpmnElement="Flow_Start"><di:waypoint x="136" y="${centerY}" /><di:waypoint x="${sourceBounds.x}" y="${centerY}" /></bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Flow_Direct_di" bpmnElement="Flow_Direct"><di:waypoint x="${sourceRight + 5}" y="${centerY}" /><di:waypoint x="${targetBounds.x - 5}" y="${centerY}" /></bpmndi:BPMNEdge>
@@ -242,6 +246,59 @@ test("corrects unobstructed main-axis Task/Gateway flows to two boundary waypoin
     );
     assert.deepEqual(await validateBpmnXml(corrected), { valid: true, reason: null });
   }
+});
+
+test("recognizes gateway tokens embedded in target element ids", async () => {
+  for (const targetId of [
+    "Gateway_StockCheck",
+    "ExclusiveGateway_StockCheck",
+    "ParallelGateway_StockCheck",
+    "InclusiveGateway_StockCheck",
+  ]) {
+    const xml = straightMainAxisPairXml("userTask", "task", { targetId });
+    const corrected = await correctStraightMainAxisWaypoints(xml);
+    const moddle = new BpmnModdle();
+    const { rootElement } = await moddle.fromXML(corrected);
+    const diagram = rootElement.diagrams.find((element) => element.$type === "bpmndi:BPMNDiagram");
+    const edge = diagram.plane.planeElement.find(
+      (element) => element.$type === "bpmndi:BPMNEdge" &&
+        element.bpmnElement?.id === "Flow_Direct",
+    );
+
+    assert.deepEqual(
+      edge.waypoint.map(({ x, y }) => ({ x, y })),
+      [{ x: 290, y: 119 }, { x: 370, y: 119 }],
+      targetId,
+    );
+  }
+});
+
+test("uses 50x50 defaults when gateway bounds omit width and height", async () => {
+  const xml = straightMainAxisPairXml("userTask", "exclusiveGateway")
+    .replace(
+      '<dc:Bounds x="370" y="94" width="50" height="50" />',
+      '<dc:Bounds x="370" y="94" />',
+    );
+  const corrected = await correctStraightMainAxisWaypoints(xml);
+  const moddle = new BpmnModdle();
+  const { rootElement } = await moddle.fromXML(corrected);
+  const diagram = rootElement.diagrams.find((element) => element.$type === "bpmndi:BPMNDiagram");
+  const gatewayShape = diagram.plane.planeElement.find(
+    (element) => element.$type === "bpmndi:BPMNShape" &&
+      element.bpmnElement?.id === "Target_1",
+  );
+  const edge = diagram.plane.planeElement.find(
+    (element) => element.$type === "bpmndi:BPMNEdge" &&
+      element.bpmnElement?.id === "Flow_Direct",
+  );
+
+  assert.equal(gatewayShape.bounds.width, 50);
+  assert.equal(gatewayShape.bounds.height, 50);
+  assert.deepEqual(
+    edge.waypoint.map(({ x, y }) => ({ x, y })),
+    [{ x: 290, y: 119 }, { x: 370, y: 119 }],
+  );
+  assert.deepEqual(await validateBpmnXml(corrected), { valid: true, reason: null });
 });
 
 test("routes a blocked main-axis flow around an intervening BPMNShape", async () => {
