@@ -183,8 +183,12 @@ export async function validateBpmnXml(
 
   const shapeBoundsByNodeId = new Map<string, { x: number; y: number; width: number; height: number }>();
   for (const shape of planeElements.filter((element) => element.$type === "bpmndi:BPMNShape")) {
-    const nodeId = shape.bpmnElement?.id;
-    const bounds = shape.bounds;
+    const shapeData = shape as unknown as {
+      bpmnElement?: { id?: string };
+      bounds?: { x: number; y: number; width: number; height: number };
+    };
+    const nodeId = shapeData.bpmnElement?.id;
+    const bounds = shapeData.bounds;
     if (!nodeId || !bounds ||
       ![bounds.x, bounds.y, bounds.width, bounds.height].every(Number.isFinite) ||
       bounds.width <= 0 || bounds.height <= 0) {
@@ -205,7 +209,9 @@ export async function validateBpmnXml(
   );
   for (const flow of sequenceFlows) {
     const flowId = flow.id ?? "(без id)";
-    const edge = edgeByFlowId.get(flow.id);
+    const edge = edgeByFlowId.get(flow.id) as unknown as
+      | { waypoint?: Array<{ x: number; y: number }> }
+      | undefined;
     const waypoints = edge?.waypoint ?? [];
     if (waypoints.length < 2) {
       return invalid(`BPMNEdge для sequenceFlow "${flowId}" должен содержать минимум две точки waypoint.`);

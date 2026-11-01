@@ -93,7 +93,7 @@ function findOrthogonalRoute(start:Waypoint,end:Waypoint,obstacles:NodeBounds[])
   for(let i=0;i<vertices.length;i++) {
     for(let j=i+1;j<vertices.length;j++) {
       const a=vertices[i],b=vertices[j];
-      const candidates=a[0]===b[0]||a[1]===b[1]
+      const candidates:Waypoint[][]=a[0]===b[0]||a[1]===b[1]
         ? [[a,b]]
         : [[a,[a[0],b[1]],b],[a,[b[0],a[1]],b]];
       candidates.forEach(candidate=>{

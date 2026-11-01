@@ -147,7 +147,7 @@ test("validates generated gateway branch spacing and geometry", async () => {
       { from: "automatic", to: "end" },
     ],
   });
-  assert.deepEqual(await validateBpmnXml(generated), { valid: true, reason: null });
+  assert.deepEqual(await validateBpmnXml(cleanAssistantXml(generated)), { valid: true, reason: null });
 });
 
 test("reports missing definitions, BPMNDiagram, and XML syntax errors", async () => {
