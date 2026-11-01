@@ -66,6 +66,8 @@ type ShapeBounds = { x: number; y: number; width: number; height: number };
 type BpmnPoint = { x: number; y: number };
 
 const gatewayIdentifierPattern = /(?:exclusive|parallel|inclusive)?gateway/i;
+const straightMainAxisNodeIdPattern =
+  /^(?:task|serviceTask|userTask|gateway|exclusiveGateway|parallelGateway|inclusiveGateway)(?:_|$)/i;
 
 function isGatewayNode(type: string | undefined, id: string | undefined): boolean {
   return gatewayIdentifierPattern.test(type ?? "") ||
@@ -77,8 +79,9 @@ function isStraightMainAxisNodeType(
   id: string | undefined,
 ): boolean {
   return Boolean(
-    type &&
-      (straightMainAxisTaskTypes.has(type) || isGatewayNode(type, id)),
+    (type && straightMainAxisTaskTypes.has(type)) ||
+      isGatewayNode(type, id) ||
+      straightMainAxisNodeIdPattern.test(id ?? ""),
   );
 }
 
@@ -201,9 +204,7 @@ export async function correctStraightMainAxisWaypoints(xml: string): Promise<str
       !sourceType ||
       !targetType ||
       !isStraightMainAxisNodeType(sourceType, sourceId) ||
-      !isStraightMainAxisNodeType(targetType, targetId) ||
-      (!straightMainAxisTaskTypes.has(sourceType) &&
-        !straightMainAxisTaskTypes.has(targetType))
+      !isStraightMainAxisNodeType(targetType, targetId)
     ) {
       continue;
     }
@@ -218,8 +219,7 @@ export async function correctStraightMainAxisWaypoints(xml: string): Promise<str
     const targetCenterY = targetBounds.y + targetBounds.height / 2;
     const startX = sourceBounds.x + sourceBounds.width;
     const endX = targetBounds.x;
-    const targetInset = isGatewayNode(targetType, targetId) ? 2 : 1;
-    const targetPointX = endX - targetInset;
+    const targetPointX = endX - 2;
     if (sourceCenterY !== targetCenterY || startX >= targetPointX) continue;
 
     const unrelatedShapes = [...boundsByNodeId].filter(([nodeId]) =>
