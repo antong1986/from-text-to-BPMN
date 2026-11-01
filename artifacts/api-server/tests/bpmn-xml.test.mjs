@@ -244,9 +244,26 @@ test("corrects unobstructed main-axis Task/Gateway flows to two boundary waypoin
   }
 });
 
-test("does not force a straight route through an intervening BPMNShape", async () => {
+test("routes a blocked main-axis flow around an intervening BPMNShape", async () => {
   const xml = straightMainAxisPairXml("userTask", "serviceTask", { obstacle: true });
-  assert.equal(await correctStraightMainAxisWaypoints(xml), xml);
+  const corrected = await correctStraightMainAxisWaypoints(xml);
+  const moddle = new BpmnModdle();
+  const { rootElement } = await moddle.fromXML(corrected);
+  const diagram = rootElement.diagrams.find((element) => element.$type === "bpmndi:BPMNDiagram");
+  const edge = diagram.plane.planeElement.find(
+    (element) => element.$type === "bpmndi:BPMNEdge" &&
+      element.bpmnElement?.id === "Flow_Direct",
+  );
+  assert.deepEqual(
+    edge.waypoint.map(({ x, y }) => ({ x, y })),
+    [
+      { x: 290, y: 119 },
+      { x: 290, y: 56 },
+      { x: 370, y: 56 },
+      { x: 370, y: 119 },
+    ],
+  );
+  assert.deepEqual(await validateBpmnXml(corrected), { valid: true, reason: null });
 });
 
 test("validates generated gateway branch spacing and geometry", async () => {
