@@ -222,6 +222,8 @@ test("corrects unobstructed main-axis Task/Gateway flows to two boundary waypoin
   ];
 
   for (const [sourceType, targetType] of pairs) {
+    const targetId = "Target_1";
+    const targetInset = /gateway/i.test(`${targetType} ${targetId}`) ? 2 : 1;
     const corrected = await correctStraightMainAxisWaypoints(
       straightMainAxisPairXml(sourceType, targetType),
     );
@@ -238,7 +240,7 @@ test("corrects unobstructed main-axis Task/Gateway flows to two boundary waypoin
       [
         { x: 180 + (sourceType.endsWith("Gateway") ? 50 : 110), y: 119 },
         {
-          x: 180 + (sourceType.endsWith("Gateway") ? 50 : 110) + 80,
+          x: 180 + (sourceType.endsWith("Gateway") ? 50 : 110) + 80 - targetInset,
           y: 119,
         },
       ],
@@ -267,7 +269,7 @@ test("recognizes gateway tokens embedded in target element ids", async () => {
 
     assert.deepEqual(
       edge.waypoint.map(({ x, y }) => ({ x, y })),
-      [{ x: 290, y: 119 }, { x: 370, y: 119 }],
+      [{ x: 290, y: 119 }, { x: 368, y: 119 }],
       targetId,
     );
   }
@@ -296,7 +298,7 @@ test("uses 50x50 defaults when gateway bounds omit width and height", async () =
   assert.equal(gatewayShape.bounds.height, 50);
   assert.deepEqual(
     edge.waypoint.map(({ x, y }) => ({ x, y })),
-    [{ x: 290, y: 119 }, { x: 370, y: 119 }],
+    [{ x: 290, y: 119 }, { x: 368, y: 119 }],
   );
   assert.deepEqual(await validateBpmnXml(corrected), { valid: true, reason: null });
 });
@@ -316,8 +318,8 @@ test("routes a blocked main-axis flow around an intervening BPMNShape", async ()
     [
       { x: 290, y: 119 },
       { x: 290, y: 70 },
-      { x: 370, y: 70 },
-      { x: 370, y: 119 },
+      { x: 369, y: 70 },
+      { x: 369, y: 119 },
     ],
   );
   assert.deepEqual(await validateBpmnXml(corrected), { valid: true, reason: null });

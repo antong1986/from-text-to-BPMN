@@ -218,13 +218,15 @@ export async function correctStraightMainAxisWaypoints(xml: string): Promise<str
     const targetCenterY = targetBounds.y + targetBounds.height / 2;
     const startX = sourceBounds.x + sourceBounds.width;
     const endX = targetBounds.x;
-    if (sourceCenterY !== targetCenterY || startX >= endX) continue;
+    const targetInset = isGatewayNode(targetType, targetId) ? 2 : 1;
+    const targetPointX = endX - targetInset;
+    if (sourceCenterY !== targetCenterY || startX >= targetPointX) continue;
 
     const unrelatedShapes = [...boundsByNodeId].filter(([nodeId]) =>
       nodeId !== sourceId && nodeId !== targetId,
     );
     const sourcePoint = { x: startX, y: sourceCenterY };
-    const targetPoint = { x: endX, y: targetCenterY };
+    const targetPoint = { x: targetPointX, y: targetCenterY };
     const corridorBlocked = unrelatedShapes.some(([, bounds]) =>
       segmentIntersectsBounds(sourcePoint, targetPoint, bounds),
     );
@@ -241,7 +243,7 @@ export async function correctStraightMainAxisWaypoints(xml: string): Promise<str
         const route = [
           sourcePoint,
           { x: startX, y: laneY },
-          { x: endX, y: laneY },
+          { x: targetPointX, y: laneY },
           targetPoint,
         ];
         return unrelatedShapes.every(([, bounds]) =>
@@ -254,7 +256,7 @@ export async function correctStraightMainAxisWaypoints(xml: string): Promise<str
       nextWaypoints = [
         sourcePoint,
         { x: startX, y: clearLane },
-        { x: endX, y: clearLane },
+        { x: targetPointX, y: clearLane },
         targetPoint,
       ];
     }
