@@ -9,6 +9,7 @@ import {
   isCompleteBpmnXml,
   validateBpmnXml,
 } from "../src/lib/bpmn-xml.ts";
+import { generateBpmnXmlFromJson } from "../../text-to-bpmn-studio/src/utils/bpmnBuilder.ts";
 
 const validXml = `<bpmn:definitions
   xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
@@ -100,6 +101,53 @@ test("reports unresolved flow references and missing shapes", async () => {
   );
   assert.equal(await isCompleteBpmnXml(missingShape), false);
   assert.match((await validateBpmnXml(missingShape)).reason, /BPMNShape/);
+});
+
+test("rejects diagonal, redundant, and obstacle-crossing waypoints", async () => {
+  const diagonal = validXml.replace(
+    '<di:waypoint x="180" y="118" />',
+    '<di:waypoint x="180" y="130" />',
+  );
+  assert.match((await validateBpmnXml(diagonal)).reason, /диагональный сегмент/);
+
+  const redundant = validXml.replace(
+    '<di:waypoint x="180" y="118" />',
+    '<di:waypoint x="160" y="118" /><di:waypoint x="180" y="118" />',
+  );
+  assert.match((await validateBpmnXml(redundant)).reason, /чередование/);
+
+  const crossing = validXml
+    .replace('targetRef="Task_1"', 'targetRef="End_1"')
+    .replace('<di:waypoint x="180" y="118" />', '<di:waypoint x="340" y="118" />');
+  assert.match((await validateBpmnXml(crossing)).reason, /пересекает или касается BPMNShape "Task_1"/);
+});
+
+test("rejects BPMNEdge without enough waypoints", async () => {
+  const missingWaypoints = validXml.replace(
+    '<di:waypoint x="136" y="118" /><di:waypoint x="180" y="118" />',
+    '<di:waypoint x="136" y="118" />',
+  );
+  assert.match((await validateBpmnXml(missingWaypoints)).reason, /минимум две точки waypoint/);
+});
+
+test("validates generated gateway branch spacing and geometry", async () => {
+  const generated = generateBpmnXmlFromJson({
+    nodes: [
+      { id: "start", type: "start", name: "Start" },
+      { id: "gateway", type: "gateway", gatewayType: "exclusive", name: "Choose" },
+      { id: "human", type: "userTask", name: "Review" },
+      { id: "automatic", type: "serviceTask", name: "Notify" },
+      { id: "end", type: "end", name: "Done" },
+    ],
+    edges: [
+      { from: "start", to: "gateway" },
+      { from: "gateway", to: "human" },
+      { from: "gateway", to: "automatic" },
+      { from: "human", to: "end" },
+      { from: "automatic", to: "end" },
+    ],
+  });
+  assert.deepEqual(await validateBpmnXml(generated), { valid: true, reason: null });
 });
 
 test("reports missing definitions, BPMNDiagram, and XML syntax errors", async () => {

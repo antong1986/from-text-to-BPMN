@@ -181,6 +181,123 @@ export async function validateBpmnXml(
     return invalid(`Не найден BPMNEdge для sequenceFlow "${missingEdgeFlow.id ?? "(без id)"}".`);
   }
 
+  const shapeBoundsByNodeId = new Map<string, { x: number; y: number; width: number; height: number }>();
+  for (const shape of planeElements.filter((element) => element.$type === "bpmndi:BPMNShape")) {
+    const nodeId = shape.bpmnElement?.id;
+    const bounds = shape.bounds;
+    if (!nodeId || !bounds ||
+      ![bounds.x, bounds.y, bounds.width, bounds.height].every(Number.isFinite) ||
+      bounds.width <= 0 || bounds.height <= 0) {
+      return invalid(`BPMNShape "${nodeId ?? "(без элемента)"}" имеет некорректные dc:Bounds.`);
+    }
+    shapeBoundsByNodeId.set(nodeId, {
+      x: bounds.x,
+      y: bounds.y,
+      width: bounds.width,
+      height: bounds.height,
+    });
+  }
+
+  const edgeByFlowId = new Map(
+    planeElements
+      .filter((element) => element.$type === "bpmndi:BPMNEdge")
+      .map((element) => [element.bpmnElement?.id, element] as const),
+  );
+  for (const flow of sequenceFlows) {
+    const flowId = flow.id ?? "(без id)";
+    const edge = edgeByFlowId.get(flow.id);
+    const waypoints = edge?.waypoint ?? [];
+    if (waypoints.length < 2) {
+      return invalid(`BPMNEdge для sequenceFlow "${flowId}" должен содержать минимум две точки waypoint.`);
+    }
+    const points = waypoints.map((point) => ({ x: point.x, y: point.y }));
+    let previousOrientation: "horizontal" | "vertical" | null = null;
+    for (let index = 0; index < points.length; index++) {
+      const point = points[index];
+      if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) {
+        return invalid(`BPMNEdge для sequenceFlow "${flowId}" содержит нечисловой waypoint.`);
+      }
+      if (index === 0) continue;
+      const previous = points[index - 1];
+      const sameX = point.x === previous.x;
+      const sameY = point.y === previous.y;
+      if (sameX === sameY) {
+        return invalid(sameX
+          ? `BPMNEdge для sequenceFlow "${flowId}" содержит нулевой или повторяющийся сегмент.`
+          : `BPMNEdge для sequenceFlow "${flowId}" содержит диагональный сегмент.`);
+      }
+      const orientation = sameY ? "horizontal" : "vertical";
+      if (index === 1 && orientation !== "horizontal") {
+        return invalid(`BPMNEdge для sequenceFlow "${flowId}" должен выходить из источника горизонтально.`);
+      }
+      if (orientation === previousOrientation) {
+        return invalid(`BPMNEdge для sequenceFlow "${flowId}" нарушает чередование горизонтальных и вертикальных сегментов.`);
+      }
+      previousOrientation = orientation;
+    }
+    if (previousOrientation !== "horizontal") {
+      return invalid(`BPMNEdge для sequenceFlow "${flowId}" должен входить в цель горизонтально.`);
+    }
+
+    const sourceId = flow.sourceRef?.id;
+    const targetId = flow.targetRef?.id;
+    for (const [nodeId, bounds] of shapeBoundsByNodeId) {
+      if (nodeId === sourceId || nodeId === targetId) continue;
+      const right = bounds.x + bounds.width;
+      const bottom = bounds.y + bounds.height;
+      for (let index = 1; index < points.length; index++) {
+        const a = points[index - 1];
+        const b = points[index];
+        const crosses = a.y === b.y
+          ? a.y >= bounds.y && a.y <= bottom &&
+            Math.max(a.x, b.x) >= bounds.x && Math.min(a.x, b.x) <= right
+          : a.x >= bounds.x && a.x <= right &&
+            Math.max(a.y, b.y) >= bounds.y && Math.min(a.y, b.y) <= bottom;
+        if (crosses) {
+          return invalid(`BPMNEdge для sequenceFlow "${flowId}" пересекает или касается BPMNShape "${nodeId}".`);
+        }
+      }
+    }
+  }
+
+  const outgoingByNodeId = new Map<string, typeof sequenceFlows>();
+  for (const flow of sequenceFlows) {
+    const sourceId = flow.sourceRef?.id;
+    if (!sourceId) continue;
+    outgoingByNodeId.set(sourceId, [...(outgoingByNodeId.get(sourceId) ?? []), flow]);
+  }
+  for (const gateway of flowNodes.filter((element) =>
+    typeof element.$type === "string" && element.$type.endsWith("Gateway"),
+  )) {
+    const gatewayId = gateway.id;
+    const gatewayBounds = gatewayId ? shapeBoundsByNodeId.get(gatewayId) : undefined;
+    const forwardTargets = (gatewayId ? outgoingByNodeId.get(gatewayId) ?? [] : [])
+      .map((flow) => flow.targetRef?.id)
+      .filter((id): id is string => Boolean(id))
+      .map((id) => ({ id, bounds: shapeBoundsByNodeId.get(id) }))
+      .filter((target): target is { id: string; bounds: { x: number; y: number; width: number; height: number } } =>
+        Boolean(gatewayBounds && target.bounds && target.bounds.x > gatewayBounds.x),
+      );
+    if (!gatewayId || !gatewayBounds || forwardTargets.length < 2) continue;
+    for (const target of forwardTargets) {
+      const gap = target.bounds.x - (gatewayBounds.x + gatewayBounds.width);
+      if (gap < 80) {
+        return invalid(`Ветка из Gateway "${gatewayId}" расположена ближе 80 px к его правой границе.`);
+      }
+    }
+    const orderedTargets = [...forwardTargets].sort((a, b) => a.bounds.y - b.bounds.y);
+    for (let index = 1; index < orderedTargets.length; index++) {
+      const previous = orderedTargets[index - 1].bounds;
+      const current = orderedTargets[index].bounds;
+      const verticalGap = Math.abs(
+        current.y + current.height / 2 - (previous.y + previous.height / 2),
+      );
+      if (verticalGap < 120) {
+        return invalid(`Ветки Gateway "${gatewayId}" должны быть разнесены по Y минимум на 120 px.`);
+      }
+    }
+  }
+
   if (expectedLanguage) {
     const labels = flowElements
       .map((element) => (element as unknown as { name?: unknown }).name)

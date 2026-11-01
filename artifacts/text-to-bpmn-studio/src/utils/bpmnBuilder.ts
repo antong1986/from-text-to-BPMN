@@ -1,5 +1,12 @@
 import type { BpmnEdge, BpmnGraph, BpmnNode } from '@workspace/api-client-react';
-import { BRANCH_ROW_HEIGHT, LOOP_CLEARANCE, LOOP_LANE_GAP, routeFlow, type NodeBounds } from './bpmnRouting.ts';
+import {
+  BRANCH_ROW_HEIGHT,
+  LOOP_CLEARANCE,
+  LOOP_LANE_GAP,
+  MIN_GATEWAY_BRANCH_GAP,
+  routeFlow,
+  type NodeBounds,
+} from './bpmnRouting.ts';
 import type { Language } from '../i18n';
 
 const BPMN_NS = 'http://www.omg.org/spec/BPMN/20100524/MODEL';
@@ -99,6 +106,45 @@ export function generateBpmnXmlFromJson(
   } else {
     generatedBounds.forEach((value,key)=>bounds.set(key,value));
   }
+  const outgoingNodeIds=new Map<string,string[]>();
+  graph.edges.forEach(edge=>{
+    outgoingNodeIds.set(edge.from,[...(outgoingNodeIds.get(edge.from)??[]),edge.to]);
+  });
+  const shiftSubtree=(rootId:string,dx:number,dy:number,protectedId:string)=>{
+    const pending=[rootId],shifted=new Set<string>();
+    while(pending.length) {
+      const id=pending.shift()!;
+      if(id===protectedId||shifted.has(id))continue;
+      shifted.add(id);
+      const nodeBounds=bounds.get(id);
+      if(nodeBounds) {
+        nodeBounds.x+=dx;
+        nodeBounds.y+=dy;
+      }
+      pending.push(...(outgoingNodeIds.get(id)??[]));
+    }
+  };
+  nodes.filter(node=>node.type==='gateway').forEach(gateway=>{
+    const gatewayBounds=bounds.get(gateway.id)!;
+    const branchTargets=[...new Set(outgoingNodeIds.get(gateway.id)??[])]
+      .map(id=>({id,bounds:bounds.get(id)!}))
+      .filter(target=>target.bounds.x>gatewayBounds.x);
+    branchTargets.forEach(target=>{
+      const requiredX=gatewayBounds.x+gatewayBounds.width+MIN_GATEWAY_BRANCH_GAP;
+      if(target.bounds.x<requiredX) {
+        shiftSubtree(target.id,requiredX-target.bounds.x,0,gateway.id);
+      }
+    });
+    const byVerticalPosition=[...branchTargets].sort((a,b)=>a.bounds.y-b.bounds.y);
+    for(let index=1;index<byVerticalPosition.length;index++) {
+      const previous=byVerticalPosition[index-1].bounds;
+      const current=byVerticalPosition[index].bounds;
+      const verticalDistance=current.y+current.height/2-(previous.y+previous.height/2);
+      if(verticalDistance<120) {
+        shiftSubtree(byVerticalPosition[index].id,0,120-verticalDistance,gateway.id);
+      }
+    }
+  });
   const diagramTop = Math.min(...[...bounds.values()].map(node=>node.y));
   const shapeXml = nodes.map((n, i) => {
     const b = bounds.get(n.id)!;
@@ -111,7 +157,10 @@ export function generateBpmnXmlFromJson(
     const loopY = diagramTop - LOOP_CLEARANCE - (isReturn ? loopLane++ : 0) * LOOP_LANE_GAP;
     const lowerGatewayBranch = nodeById.get(e.from)!.type === 'gateway' &&
       to.y + to.height / 2 > from.y + from.height / 2;
-    const points = routeFlow(from, to, loopY, lowerGatewayBranch, e.from === e.to);
+    const obstacles=[...bounds.entries()]
+      .filter(([nodeId])=>nodeId!==e.from&&nodeId!==e.to)
+      .map(([,nodeBounds])=>nodeBounds);
+    const points = routeFlow(from, to, loopY, lowerGatewayBranch, e.from === e.to, {obstacles});
     return `<bpmndi:BPMNEdge id="${edgeIds[i]}_di" bpmnElement="${edgeIds[i]}">${points.map(([x,y]) => `<di:waypoint x="${x}" y="${y}" />`).join('')}</bpmndi:BPMNEdge>`;
   }).join('\n');
   const elementXml = nodes.map((n, i) => {
