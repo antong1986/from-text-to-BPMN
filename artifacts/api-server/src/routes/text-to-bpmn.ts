@@ -24,6 +24,7 @@ import {
   BPMN_GRAPH_SYSTEM_PROMPT,
   BPMN_REFINEMENT_SYSTEM_PROMPT,
   BPMN_SPEC_SYSTEM_PROMPT,
+  buildBpmnRefinementMessageLanguageInstruction,
   buildBpmnSpecLanguageInstruction,
 } from "../lib/text-to-bpmn-prompts";
 import {
@@ -335,7 +336,7 @@ router.post("/refine", checkBPMNLimits, async (req, res): Promise<void> => {
     [
       {
         role: "system",
-        content: `${BPMN_REFINEMENT_SYSTEM_PROMPT}\n\n${buildBpmnSourceLanguageInstruction(sourceLanguage)}`,
+        content: `${BPMN_REFINEMENT_SYSTEM_PROMPT}\n\n${buildBpmnSourceLanguageInstruction(sourceLanguage)}\n\n${buildBpmnRefinementMessageLanguageInstruction(sourceLanguage)}`,
       },
       {
         role: "user",
@@ -374,6 +375,17 @@ router.post("/refine", checkBPMNLimits, async (req, res): Promise<void> => {
   }
 
   const updatedGraph = output.data.graph;
+  const validatorMessage = hasBpmnLabelsInWrongLanguage([output.data.message], sourceLanguage)
+    ? sourceLanguage === "ru"
+      ? "Диаграмма обновлена с учётом вашего уточнения."
+      : "The diagram has been updated based on your clarification."
+    : output.data.message;
+  if (validatorMessage !== output.data.message) {
+    req.log.warn(
+      { model: getAiModelName(), sourceLanguage },
+      "Gemini validator message did not match the source language",
+    );
+  }
   const refinementIssue = getRefinementIssue(previousGraph, updatedGraph);
   if (refinementIssue === "removed-node") {
     res.status(422).json({
@@ -402,7 +414,7 @@ router.post("/refine", checkBPMNLimits, async (req, res): Promise<void> => {
     sendPaymentRequired(res, req.bpmnLimitMode);
     return;
   }
-  res.json(output.data);
+  res.json({ ...output.data, message: validatorMessage });
 });
 
 router.post("/generate-spec", checkBPMNLimits, async (req, res): Promise<void> => {

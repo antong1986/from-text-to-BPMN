@@ -14,7 +14,7 @@ import {
 import { MINIMAL_BPMN_XML } from './utils/mockBpmn';
 import { generateSqlSchema } from './utils/generateSqlSchema';
 import { parseGeneratedGraph } from './utils/parseGeneratedGraph';
-import { getInitialLanguage, getUiText, localizeKnownError, type Language } from './i18n';
+import { detectSourceLanguage, getInitialLanguage, getUiText, localizeKnownError, type Language } from './i18n';
 
 type ChatMessage={sender:'ai'|'user';text:string;canRollback?:boolean};
 type DiagramSnapshot={
@@ -180,8 +180,9 @@ function StudioApp(){
     const combined=appended?.graph??generatedGraph;
     const xml=appended?.xml??generatedXml??generateBpmnXmlFromJson(generatedGraph,undefined,language);
     setUserInput(description);setGraph(combined);replaceDiagramXml(xml);setHasGenerated(true);
-    const task=generatedGraph.nodes.find(n=>n.type==='userTask'||n.type==='serviceTask')?.name||copy.fallbackTaskName;
-    const question=copy.questions[Math.floor(Math.random()*copy.questions.length)].replace('{{task}}',task);
+    const conversationCopy=getUiText(detectSourceLanguage(description));
+    const task=generatedGraph.nodes.find(n=>n.type==='userTask'||n.type==='serviceTask')?.name||conversationCopy.fallbackTaskName;
+    const question=conversationCopy.questions[Math.floor(Math.random()*conversationCopy.questions.length)].replace('{{task}}',task);
     setChatMessages([{sender:'ai',text:question}]);setChatInput('');setIsValidated(false);
     setIsScenarioFinished(false);setSqlSchema(null);
   };
@@ -234,6 +235,7 @@ function StudioApp(){
   };
   const handleReply=async()=>{
     const answer=chatInput.trim();if(!answer||!hasAiMessage||isReplyPending)return;
+    const sourceLanguage=detectSourceLanguage(userInput.trim());
     setChatMessages(v=>[...v,{sender:'user',text:answer}]);setChatInput('');setIsScenarioFinished(false);
     setIsReplyPending(true);
     const requestId=++replyRequestId.current;
@@ -266,7 +268,7 @@ function StudioApp(){
       await refreshAuth();
     }catch(error){
       if(requestId!==replyRequestId.current)return;
-      setChatMessages(v=>[...v,{sender:'ai',text:refinementErrorMessage(error,language),canRollback:true}]);
+      setChatMessages(v=>[...v,{sender:'ai',text:refinementErrorMessage(error,sourceLanguage),canRollback:true}]);
     }finally{
       if(requestId===replyRequestId.current)setIsReplyPending(false);
     }
@@ -291,7 +293,8 @@ function StudioApp(){
   };
   const handleFinish=()=>{
     replyRequestId.current+=1;
-    setIsReplyPending(false);setChatMessages(v=>[...v,{sender:'ai',text:copy.finishedByUser}]);setIsValidated(true);setIsScenarioFinished(true);
+    const conversationCopy=getUiText(detectSourceLanguage(userInput.trim()));
+    setIsReplyPending(false);setChatMessages(v=>[...v,{sender:'ai',text:conversationCopy.finishedByUser}]);setIsValidated(true);setIsScenarioFinished(true);
   };
   const handleClearCanvas=()=>{
     uploadRequestId.current+=1;

@@ -1,5 +1,11 @@
 export type Language = 'en' | 'ru';
 
+export function detectSourceLanguage(text: string): Language {
+  const cyrillicCount = [...text.matchAll(/\p{Script=Cyrillic}/gu)].length;
+  const latinCount = [...text.matchAll(/\p{Script=Latin}/gu)].length;
+  return cyrillicCount > latinCount ? 'ru' : 'en';
+}
+
 export interface StudioCopy {
   pageTitle: string;
   pageDescription: string;

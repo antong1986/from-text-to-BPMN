@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { getInitialLanguage, getUiText, localizeKnownError, translateBpmnUi } from "../src/i18n.ts";
+import { detectSourceLanguage, getInitialLanguage, getUiText, localizeKnownError, translateBpmnUi } from "../src/i18n.ts";
 
 test("English is the default locale and both interface dictionaries are available", () => {
   assert.equal(getInitialLanguage(), "en");
@@ -8,6 +8,15 @@ test("English is the default locale and both interface dictionaries are availabl
   assert.equal(getUiText("ru").generateDiagram, "Сгенерировать диаграмму");
   assert.equal(getUiText("en").chatEmptyFirstLine, "Questions and suggestions about");
   assert.equal(getUiText("en").chatEmptySecondLine, "the generated diagram will appear here");
+});
+
+test("validator conversation language follows the process description, not the interface locale", () => {
+  assert.equal(detectSourceLanguage("The customer submits an order."), "en");
+  assert.equal(detectSourceLanguage("Покупатель оформляет заказ."), "ru");
+  assert.equal(
+    getUiText(detectSourceLanguage("Покупатель оформляет заказ.")).questions[1].startsWith("Схема готова"),
+    true,
+  );
 });
 
 test("BPMN editor tooltips switch languages in both directions", () => {
