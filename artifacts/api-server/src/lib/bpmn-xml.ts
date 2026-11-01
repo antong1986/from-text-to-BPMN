@@ -63,6 +63,7 @@ export function cleanAssistantXml(value: string): string {
 const straightMainAxisTaskTypes = new Set(["bpmn:UserTask", "bpmn:ServiceTask"]);
 
 type ShapeBounds = { x: number; y: number; width: number; height: number };
+type BpmnPoint = { x: number; y: number };
 
 function isStraightMainAxisNodeType(type: string | undefined): boolean {
   return Boolean(
@@ -71,9 +72,28 @@ function isStraightMainAxisNodeType(type: string | undefined): boolean {
   );
 }
 
+function segmentIntersectsBounds(
+  start: BpmnPoint,
+  end: BpmnPoint,
+  bounds: ShapeBounds,
+): boolean {
+  const right = bounds.x + bounds.width;
+  const bottom = bounds.y + bounds.height;
+  return start.y === end.y
+    ? start.y >= bounds.y &&
+        start.y <= bottom &&
+        Math.max(start.x, end.x) >= bounds.x &&
+        Math.min(start.x, end.x) <= right
+    : start.x >= bounds.x &&
+        start.x <= right &&
+        Math.max(start.y, end.y) >= bounds.y &&
+        Math.min(start.y, end.y) <= bottom;
+}
+
 /**
  * Replace model-authored routes for unobstructed, same-row Task/Gateway flows
- * with a direct boundary-to-boundary segment before strict XML validation.
+ * with a direct boundary-to-boundary segment. If another shape blocks that
+ * line, route around it on a clear orthogonal lane before strict validation.
  */
 export async function correctStraightMainAxisWaypoints(xml: string): Promise<string> {
   let rootElement: Awaited<ReturnType<typeof moddle.fromXML>>["rootElement"];
@@ -164,23 +184,48 @@ export async function correctStraightMainAxisWaypoints(xml: string): Promise<str
     const endX = targetBounds.x;
     if (sourceCenterY !== targetCenterY || startX >= endX) continue;
 
-    // A straight route is only safe when the open corridor contains no
-    // unrelated BPMNShape. Obstructed routes remain for the normal validator
-    // and model self-correction instead of being forced through a node.
-    const corridorBlocked = [...boundsByNodeId].some(([nodeId, bounds]) => {
-      if (nodeId === sourceId || nodeId === targetId) return false;
-      const right = bounds.x + bounds.width;
-      const bottom = bounds.y + bounds.height;
-      return sourceCenterY >= bounds.y &&
-        sourceCenterY <= bottom &&
-        Math.max(startX, bounds.x) <= Math.min(endX, right);
-    });
-    if (corridorBlocked) continue;
+    const unrelatedShapes = [...boundsByNodeId].filter(([nodeId]) =>
+      nodeId !== sourceId && nodeId !== targetId,
+    );
+    const sourcePoint = { x: startX, y: sourceCenterY };
+    const targetPoint = { x: endX, y: targetCenterY };
+    const corridorBlocked = unrelatedShapes.some(([, bounds]) =>
+      segmentIntersectsBounds(sourcePoint, targetPoint, bounds),
+    );
 
-    const nextWaypoints = [
-      { x: startX, y: sourceCenterY },
-      { x: endX, y: targetCenterY },
-    ];
+    let nextWaypoints: BpmnPoint[] = [sourcePoint, targetPoint];
+    if (corridorBlocked) {
+      const minY = Math.min(...unrelatedShapes.map(([, bounds]) => bounds.y));
+      const maxBottom = Math.max(
+        ...unrelatedShapes.map(([, bounds]) => bounds.y + bounds.height),
+      );
+      const laneYs = [Math.max(0, minY - 24), maxBottom + 24];
+      const clearLane = laneYs.find((laneY) => {
+        if (laneY === sourceCenterY) return false;
+        const route = [
+          sourcePoint,
+          { x: startX, y: laneY },
+          { x: endX, y: laneY },
+          targetPoint,
+        ];
+        return unrelatedShapes.every(([, bounds]) =>
+          route.slice(1).every((point, index) =>
+            !segmentIntersectsBounds(route[index], point, bounds),
+          ),
+        );
+      });
+      if (clearLane === undefined) continue;
+      nextWaypoints = [
+        sourcePoint,
+        { x: startX, y: clearLane },
+        { x: endX, y: clearLane },
+        targetPoint,
+      ];
+    }
+
+    const edge = flowId ? edgesByFlowId.get(flowId) : undefined;
+    if (!edge) continue;
+
     const currentWaypoints = edge.waypoint ?? [];
     if (
       currentWaypoints.length === nextWaypoints.length &&
