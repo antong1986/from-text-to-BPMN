@@ -2,7 +2,10 @@ import { pool } from "@workspace/db";
 import { logger } from "./lib/logger";
 import { ensureSessionStoreTable } from "./lib/session-store";
 import { ensureUsersTable } from "./lib/user-store";
-import { ensurePaymentOrdersTable } from "./lib/payment-orders";
+import {
+  ensureLemonSqueezyWebhookEventsTable,
+  ensurePaymentOrdersTable,
+} from "./lib/payment-orders";
 
 const rawPort = process.env["PORT"];
 
@@ -23,6 +26,7 @@ async function startServer(): Promise<void> {
     await ensureUsersTable((sql) => pool.query(sql));
     await ensureSessionStoreTable((sql) => pool.query(sql));
     await ensurePaymentOrdersTable((sql) => pool.query(sql));
+    await ensureLemonSqueezyWebhookEventsTable((sql) => pool.query(sql));
 
     const { default: app } = await import("./app");
     const server = app.listen(port, () => {

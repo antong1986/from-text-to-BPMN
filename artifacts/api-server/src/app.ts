@@ -42,6 +42,10 @@ app.use(cors({
   },
   credentials: true,
 }));
+app.use(
+  "/api/payment/webhook-lemonsqueezy",
+  express.raw({ type: "application/json", limit: "1mb" }),
+);
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true }));
 

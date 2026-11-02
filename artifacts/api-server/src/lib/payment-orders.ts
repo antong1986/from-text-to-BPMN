@@ -17,9 +17,23 @@ const createPaymentOrdersUserIndexSql = `
   ON "payment_orders" ("user_id")
 `;
 
+const createLemonSqueezyWebhookEventsTableSql = `
+  CREATE TABLE IF NOT EXISTS "lemon_squeezy_webhook_events" (
+    "order_id" VARCHAR(100) PRIMARY KEY,
+    "user_id" INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    "processed_at" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )
+`;
+
 export async function ensurePaymentOrdersTable(
   query: (sql: string) => Promise<unknown>,
 ): Promise<void> {
   await query(createPaymentOrdersTableSql);
   await query(createPaymentOrdersUserIndexSql);
+}
+
+export async function ensureLemonSqueezyWebhookEventsTable(
+  query: (sql: string) => Promise<unknown>,
+): Promise<void> {
+  await query(createLemonSqueezyWebhookEventsTableSql);
 }
