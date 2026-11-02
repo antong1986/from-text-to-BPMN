@@ -2,6 +2,7 @@ import { pool } from "@workspace/db";
 import { logger } from "./lib/logger";
 import { ensureSessionStoreTable } from "./lib/session-store";
 import { ensureUsersTable } from "./lib/user-store";
+import { ensurePaymentOrdersTable } from "./lib/payment-orders";
 
 const rawPort = process.env["PORT"];
 
@@ -21,6 +22,7 @@ async function startServer(): Promise<void> {
   try {
     await ensureUsersTable((sql) => pool.query(sql));
     await ensureSessionStoreTable((sql) => pool.query(sql));
+    await ensurePaymentOrdersTable((sql) => pool.query(sql));
 
     const { default: app } = await import("./app");
     const server = app.listen(port, () => {
@@ -33,7 +35,7 @@ async function startServer(): Promise<void> {
   } catch (err) {
     logger.error(
       { err },
-      "Failed to initialize PostgreSQL auth tables; server will not start",
+      "Failed to initialize PostgreSQL tables; server will not start",
     );
     process.exit(1);
   }
