@@ -64,6 +64,7 @@ export interface StudioCopy {
   payInUsd: string;
   paymentCreating: string;
   paymentError: string;
+  paymentClose: string;
   logout: string;
   authPrompt: string;
   authChecking: string;
@@ -175,6 +176,7 @@ const english: StudioCopy = {
   payInUsd: 'Pay in USD · $9.99',
   paymentCreating: 'Opening checkout…',
   paymentError: 'Could not open checkout. Please try again.',
+  paymentClose: 'Return to studio',
   logout: 'Sign out',
   authPrompt: 'Sign in to generate',
   authChecking: 'Checking sign-in…',
@@ -286,6 +288,7 @@ const russian: StudioCopy = {
   payInUsd: 'Оплатить в иностранной валюте · $9.99 USD',
   paymentCreating: 'Открываю оплату…',
   paymentError: 'Не удалось перейти к оплате. Попробуйте ещё раз.',
+  paymentClose: 'Вернуться в студию',
   logout: 'Выйти',
   authPrompt: 'Войдите для генерации',
   authChecking: 'Проверка входа…',

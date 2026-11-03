@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Check, ChevronDown, Crown, Network, Paperclip, Send, Undo2 } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Check, ChevronDown, Crown, Network, Paperclip, Send, Undo2, X } from 'lucide-react';
 import { useRefineBpmn, useUploadDocument, type BpmnGraph } from '@workspace/api-client-react';
 import BPMNViewer from './components/BPMNViewer';
 import SpecExportButton from './components/SpecExportButton';
@@ -37,8 +38,10 @@ type AuthStatus={
 type PaymentProvider='aaio'|'lemonsqueezy';
 type LemonSqueezyWindow=Window&{
   LemonSqueezy?:{
+    Setup?:(options:{eventHandler:(event:unknown)=>void})=>void;
     Url?:{
       Open?:(url:string)=>void;
+      Close?:()=>void;
     };
   };
 };
@@ -129,6 +132,7 @@ function StudioApp(){
   const [authStatus,setAuthStatus]=useState<AuthStatus|null>(null);
   const [isPaymentMenuOpen,setIsPaymentMenuOpen]=useState(false);
   const [isPaymentPending,setIsPaymentPending]=useState(false);
+  const [isLemonCheckoutOpen,setIsLemonCheckoutOpen]=useState(false);
   const [paymentFailed,setPaymentFailed]=useState(false);
   const [rollbackSnapshot,setRollbackSnapshot]=useState<DiagramSnapshot|null>(null);
   const [asideWidth,setAsideWidth]=useState(410);
@@ -190,7 +194,13 @@ function StudioApp(){
         const lemonSqueezy=(window as LemonSqueezyWindow).LemonSqueezy;
         if(lemonSqueezy?.Url?.Open){
           try{
+            lemonSqueezy.Setup?.({
+              eventHandler:(event)=>{
+                if(event==='close')setIsLemonCheckoutOpen(false);
+              },
+            });
             lemonSqueezy.Url.Open(payload.url);
+            setIsLemonCheckoutOpen(true);
             setIsPaymentMenuOpen(false);
             return;
           }catch{
@@ -206,6 +216,14 @@ function StudioApp(){
       setPaymentFailed(true);
     }finally{
       setIsPaymentPending(false);
+    }
+  };
+  const closeLemonCheckout=()=>{
+    try{
+      (window as LemonSqueezyWindow).LemonSqueezy?.Url?.Close?.();
+      setIsLemonCheckoutOpen(false);
+    }catch{
+      // Keep the return control visible if the overlay API could not close the checkout.
     }
   };
 
@@ -548,6 +566,20 @@ function StudioApp(){
         <pre className="sql-code" data-testid="result-sql-schema"><code>{sqlSchema}</code></pre>
       </div>
     </div>}
+    {isLemonCheckoutOpen&&createPortal(
+      <button
+        type="button"
+        className="flex h-10 w-10 items-center justify-center rounded-full border border-[#d5e0dc] bg-white text-[#267b70] shadow-lg transition hover:bg-[#f0f7f4] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#267b70]"
+        style={{position:'fixed',top:'42px',left:'10px',zIndex:2147483647}}
+        aria-label={copy.paymentClose}
+        title={copy.paymentClose}
+        onClick={closeLemonCheckout}
+        data-testid="button-close-lemon-checkout"
+      >
+        <X size={18} aria-hidden="true"/>
+      </button>,
+      document.body,
+    )}
   </div>;
 }
 
