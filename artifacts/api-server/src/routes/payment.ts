@@ -20,6 +20,7 @@ const router: IRouter = Router();
 const AAIO_CREATE_ORDER_URL = "https://aaio.so/merchant/get_pay_url";
 const AAIO_ORDER_INFO_URL = "https://aaio.so/api/info-pay";
 const LEMON_SQUEEZY_API_BASE = "https://api.lemonsqueezy.com/v1";
+const LEMON_SQUEEZY_PREMIUM_PRICE_CENTS = 999;
 const PREMIUM_AMOUNT = "990.00";
 const PREMIUM_CURRENCY = "RUB";
 const PAYMENT_REQUEST_TIMEOUT_MS = 15_000;
@@ -157,13 +158,14 @@ async function resolveLemonSqueezyStoreId(
   const variant = asRecord(variantResponse.data);
   const variantAttributes = asRecord(variant?.attributes);
   const productId = getLemonResourceId(variantAttributes?.product_id);
-  if (
-    variant?.type !== "variants" ||
-    variant?.id !== config.variantId ||
-    !productId ||
-    Number(variantAttributes?.price) !== 1500
-  ) {
-    throw new Error("The Lemon Squeezy variant must be published and priced at 1500 USD cents");
+  if (variant?.type !== "variants" || variant?.id !== config.variantId || !productId) {
+    throw new Error("The configured Lemon Squeezy ID did not resolve to a product variant");
+  }
+  const variantPriceCents = Number(variantAttributes?.price);
+  if (variantPriceCents !== LEMON_SQUEEZY_PREMIUM_PRICE_CENTS) {
+    throw new Error(
+      `The Lemon Squeezy variant must be priced at ${LEMON_SQUEEZY_PREMIUM_PRICE_CENTS} USD cents; received ${variantPriceCents}`,
+    );
   }
   if (
     cachedLemonStore?.variantId === config.variantId &&
