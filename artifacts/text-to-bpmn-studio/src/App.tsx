@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Check, Network, Paperclip, Send, Undo2 } from 'lucide-react';
+import { Check, ChevronDown, Crown, Network, Paperclip, Send, Undo2 } from 'lucide-react';
 import { useRefineBpmn, useUploadDocument, type BpmnGraph } from '@workspace/api-client-react';
 import BPMNViewer from './components/BPMNViewer';
 import SpecExportButton from './components/SpecExportButton';
@@ -34,6 +34,8 @@ type AuthStatus={
     isWhitelisted:boolean;
   };
 };
+type PaymentProvider='aaio'|'lemonsqueezy';
+
 function getErrorText(error: unknown): string | null {
   if (error && typeof error === 'object' && 'data' in error) {
     const data = (error as {data?:unknown}).data;
@@ -57,6 +59,17 @@ function getApiUrl(path: string): string {
   const apiBaseUrl = import.meta.env.VITE_API_URL?.trim().replace(/\/+$/, "");
   if (!apiBaseUrl) return path;
   return `${apiBaseUrl}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
+function isAllowedPaymentUrl(value: unknown, provider: PaymentProvider): value is string {
+  if (typeof value !== 'string') return false;
+  try {
+    const url=new URL(value);
+    const domains=provider==='aaio'?['aaio.so','aaio.io']:['lemonsqueezy.com'];
+    return url.protocol==='https:'&&domains.some(domain=>url.hostname===domain||url.hostname.endsWith(`.${domain}`));
+  }catch{
+    return false;
+  }
 }
 
 function readDescriptionDraft(): string {
@@ -107,6 +120,9 @@ function StudioApp(){
   const [isDocumentUploading,setIsDocumentUploading]=useState(false);
   const [isGenerating,setIsGenerating]=useState(false);
   const [authStatus,setAuthStatus]=useState<AuthStatus|null>(null);
+  const [isPaymentMenuOpen,setIsPaymentMenuOpen]=useState(false);
+  const [isPaymentPending,setIsPaymentPending]=useState(false);
+  const [paymentFailed,setPaymentFailed]=useState(false);
   const [rollbackSnapshot,setRollbackSnapshot]=useState<DiagramSnapshot|null>(null);
   const [asideWidth,setAsideWidth]=useState(410);
   const [isResizing,setIsResizing]=useState(false);
@@ -116,6 +132,7 @@ function StudioApp(){
   const flushDiagramXml=useRef<(()=>Promise<string>)|null>(null);
   const documentInput=useRef<HTMLInputElement>(null);
   const messageEnd=useRef<HTMLDivElement>(null);
+  const paymentMenuRef=useRef<HTMLDivElement>(null);
   const refine=useRefineBpmn();
   const uploadDocument=useUploadDocument();
   const busy=isGenerating;
@@ -149,9 +166,53 @@ function StudioApp(){
     try{await fetch(getApiUrl('/api/auth/logout'),{method:'POST',credentials:'include'});}
     finally{await refreshAuth();}
   };
+  const handlePaymentCheckout=async(provider:PaymentProvider)=>{
+    if(authStatus?.authenticated!==true||!authStatus.user||isPaymentPending)return;
+    setIsPaymentPending(true);setPaymentFailed(false);
+    try{
+      const response=await fetch(getApiUrl('/api/payment/create'),{
+        method:'POST',
+        credentials:'include',
+        headers:{'Content-Type':'application/json','Accept':'application/json'},
+        body:JSON.stringify({provider}),
+      });
+      const payload=await response.json().catch(()=>null) as {url?:unknown}|null;
+      if(response.status===401)await refreshAuth();
+      if(!response.ok||!isAllowedPaymentUrl(payload?.url,provider))throw new Error('Payment checkout failed');
+      window.location.assign(payload.url);
+    }catch{
+      setPaymentFailed(true);
+    }finally{
+      setIsPaymentPending(false);
+    }
+  };
 
   useEffect(()=>{messageEnd.current?.scrollIntoView({behavior:'smooth'});},[chatMessages]);
   useEffect(()=>{void refreshAuth();},[refreshAuth]);
+  useEffect(()=>{
+    if(!isPaymentMenuOpen)return;
+    const onPointerDown=(event:PointerEvent)=>{
+      if(event.target instanceof Node&&!paymentMenuRef.current?.contains(event.target))setIsPaymentMenuOpen(false);
+    };
+    const onKeyDown=(event:KeyboardEvent)=>{
+      if(event.key==='Escape'){
+        setIsPaymentMenuOpen(false);
+        paymentMenuRef.current?.querySelector<HTMLButtonElement>('[data-testid="button-premium-payment"]')?.focus();
+      }
+    };
+    document.addEventListener('pointerdown',onPointerDown);
+    document.addEventListener('keydown',onKeyDown);
+    return()=>{
+      document.removeEventListener('pointerdown',onPointerDown);
+      document.removeEventListener('keydown',onKeyDown);
+    };
+  },[isPaymentMenuOpen]);
+  useEffect(()=>{
+    if(authStatus?.authenticated!==true){
+      setIsPaymentMenuOpen(false);
+      setPaymentFailed(false);
+    }
+  },[authStatus?.authenticated]);
   useEffect(()=>{saveDescriptionDraft(userInput);},[userInput]);
   useEffect(()=>{
     document.documentElement.lang=language;
@@ -393,6 +454,34 @@ function StudioApp(){
         <div className="toolbar">
           <button type="button" className="secondary-btn" disabled={!isValidated} onClick={()=>setSqlSchema(generateSqlSchema(currentXml,language))} title={!isValidated&&hasGenerated?copy.validatorTooltip:undefined} data-testid="button-generate-sql">{copy.databaseButton}</button>
           <SpecExportButton xml={currentXml} sourceDescription={userInput} disabled={!isValidated} hasDiagram={hasGenerated} language={language}/>
+          {signedInUser&&!signedInUser.hasActivePremium&&!signedInUser.isWhitelisted&&<div className="payment-control" ref={paymentMenuRef}>
+            <button
+              type="button"
+              className="payment-trigger"
+              aria-expanded={isPaymentMenuOpen}
+              aria-controls="premium-payment-menu"
+              disabled={isPaymentPending}
+              data-testid="button-premium-payment"
+              onClick={()=>{
+                setPaymentFailed(false);
+                setIsPaymentMenuOpen(open=>!open);
+              }}
+            >
+              {isPaymentPending?<><span className="spin" aria-hidden="true"/>{copy.paymentCreating}</>:<><Crown size={13}/>{copy.buyPremium}<ChevronDown size={13}/></>}
+            </button>
+            {isPaymentMenuOpen&&<div className="payment-menu" id="premium-payment-menu" role="group" aria-label={copy.paymentCurrencyAria}>
+              <div className="payment-menu-title">{copy.paymentCurrencyPrompt}</div>
+              <button type="button" className="payment-option" disabled={isPaymentPending} data-testid="button-pay-rubles" onClick={()=>void handlePaymentCheckout('aaio')}>
+                <span className="payment-currency-mark" aria-hidden="true">₽</span>
+                <span>{copy.payInRubles}</span>
+              </button>
+              <button type="button" className="payment-option" disabled={isPaymentPending} data-testid="button-pay-usd" onClick={()=>void handlePaymentCheckout('lemonsqueezy')}>
+                <span className="payment-currency-mark" aria-hidden="true">$</span>
+                <span>{copy.payInUsd}</span>
+              </button>
+              {paymentFailed&&<div className="payment-error" role="alert" data-testid="status-payment-error">{copy.paymentError}</div>}
+            </div>}
+          </div>}
           <div className={`auth-bar${signedInUser?' is-authenticated':''}`} data-testid="auth-status">
             {signedInUser?<>
               <div className="auth-summary">

@@ -57,6 +57,13 @@ export interface StudioCopy {
   adminUnlimited: string;
   unlimited: string;
   freeQuota: (count: number) => string;
+  buyPremium: string;
+  paymentCurrencyPrompt: string;
+  paymentCurrencyAria: string;
+  payInRubles: string;
+  payInUsd: string;
+  paymentCreating: string;
+  paymentError: string;
   logout: string;
   authPrompt: string;
   authChecking: string;
@@ -161,6 +168,13 @@ const english: StudioCopy = {
   adminUnlimited: 'Admin / Unlimited',
   unlimited: 'Unlimited',
   freeQuota: (count) => `Free: ${count}`,
+  buyPremium: 'Buy Premium',
+  paymentCurrencyPrompt: 'Choose a currency',
+  paymentCurrencyAria: 'Choose payment currency',
+  payInRubles: 'Pay in rubles · 990 ₽',
+  payInUsd: 'Pay in USD · $15',
+  paymentCreating: 'Opening checkout…',
+  paymentError: 'Could not open checkout. Please try again.',
   logout: 'Sign out',
   authPrompt: 'Sign in to generate',
   authChecking: 'Checking sign-in…',
@@ -265,6 +279,13 @@ const russian: StudioCopy = {
   adminUnlimited: 'Разработчик / Безлимит',
   unlimited: 'Безлимит',
   freeQuota: (count) => `Бесплатно: ${count}`,
+  buyPremium: 'Купить Premium',
+  paymentCurrencyPrompt: 'Выберите валюту оплаты',
+  paymentCurrencyAria: 'Выбор валюты оплаты',
+  payInRubles: 'Оплатить в рублях · 990 ₽',
+  payInUsd: 'Оплатить в иностранной валюте · $15 USD',
+  paymentCreating: 'Открываю оплату…',
+  paymentError: 'Не удалось перейти к оплате. Попробуйте ещё раз.',
   logout: 'Выйти',
   authPrompt: 'Войдите для генерации',
   authChecking: 'Проверка входа…',
