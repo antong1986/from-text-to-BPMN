@@ -35,6 +35,13 @@ type AuthStatus={
   };
 };
 type PaymentProvider='aaio'|'lemonsqueezy';
+type LemonSqueezyWindow=Window&{
+  LemonSqueezy?:{
+    Url?:{
+      Open?:(url:string)=>void;
+    };
+  };
+};
 
 function getErrorText(error: unknown): string | null {
   if (error && typeof error === 'object' && 'data' in error) {
@@ -179,6 +186,21 @@ function StudioApp(){
       const payload=await response.json().catch(()=>null) as {url?:unknown}|null;
       if(response.status===401)await refreshAuth();
       if(!response.ok||!isAllowedPaymentUrl(payload?.url,provider))throw new Error('Payment checkout failed');
+      if(provider==='lemonsqueezy'){
+        const lemonSqueezy=(window as LemonSqueezyWindow).LemonSqueezy;
+        if(lemonSqueezy?.Url?.Open){
+          try{
+            lemonSqueezy.Url.Open(payload.url);
+            setIsPaymentMenuOpen(false);
+            return;
+          }catch{
+            window.location.href=payload.url;
+            return;
+          }
+        }
+        window.location.href=payload.url;
+        return;
+      }
       window.location.assign(payload.url);
     }catch{
       setPaymentFailed(true);
