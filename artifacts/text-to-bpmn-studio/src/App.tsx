@@ -39,6 +39,9 @@ type PaymentProvider='aaio'|'lemonsqueezy';
 type LemonSqueezyWindow=Window&{
   LemonSqueezy?:{
     Setup?:(options:{eventHandler:(event:unknown)=>void})=>void;
+    Loader?:{
+      Hide?:()=>void;
+    };
     Url?:{
       Open?:(url:string)=>void;
       Close?:()=>void;
@@ -196,7 +199,10 @@ function StudioApp(){
           try{
             lemonSqueezy.Setup?.({
               eventHandler:(event)=>{
-                if(event==='close')setIsLemonCheckoutOpen(false);
+                if(event==='close'){
+                  lemonSqueezy.Loader?.Hide?.();
+                  setIsLemonCheckoutOpen(false);
+                }
               },
             });
             lemonSqueezy.Url.Open(payload.url);
@@ -219,12 +225,16 @@ function StudioApp(){
     }
   };
   const closeLemonCheckout=()=>{
+    const lemonSqueezy=(window as LemonSqueezyWindow).LemonSqueezy;
+    let didClose=false;
     try{
-      (window as LemonSqueezyWindow).LemonSqueezy?.Url?.Close?.();
-      setIsLemonCheckoutOpen(false);
-    }catch{
-      // Keep the return control visible if the overlay API could not close the checkout.
-    }
+      if(lemonSqueezy?.Url?.Close){
+        lemonSqueezy.Url.Close();
+        didClose=true;
+      }
+    }catch{/* Keep the return control available if the overlay API fails. */}
+    lemonSqueezy?.Loader?.Hide?.();
+    if(didClose)setIsLemonCheckoutOpen(false);
   };
 
   useEffect(()=>{messageEnd.current?.scrollIntoView({behavior:'smooth'});},[chatMessages]);
