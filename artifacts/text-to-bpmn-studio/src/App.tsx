@@ -35,7 +35,8 @@ type AuthStatus={
     isWhitelisted:boolean;
   };
 };
-type PaymentProvider='aaio'|'lemonsqueezy';
+type PaymentProvider='anypay'|'lemonsqueezy';
+type AnyPayMethod='card'|'sbp';
 type LemonSqueezyWindow=Window&{
   LemonSqueezy?:{
     Setup?:(options:{eventHandler:(event:unknown)=>void})=>void;
@@ -78,7 +79,7 @@ function isAllowedPaymentUrl(value: unknown, provider: PaymentProvider): value i
   if (typeof value !== 'string') return false;
   try {
     const url=new URL(value);
-    const domains=provider==='aaio'?['aaio.so','aaio.io']:['lemonsqueezy.com'];
+    const domains=provider==='anypay'?['anypay.io']:['lemonsqueezy.com'];
     return url.protocol==='https:'&&domains.some(domain=>url.hostname===domain||url.hostname.endsWith(`.${domain}`));
   }catch{
     return false;
@@ -180,7 +181,7 @@ function StudioApp(){
     try{await fetch(getApiUrl('/api/auth/logout'),{method:'POST',credentials:'include'});}
     finally{await refreshAuth();}
   };
-  const handlePaymentCheckout=async(provider:PaymentProvider)=>{
+  const handlePaymentCheckout=async(provider:PaymentProvider,method?:AnyPayMethod)=>{
     if(authStatus?.authenticated!==true||!authStatus.user||isPaymentPending)return;
     setIsPaymentPending(true);setPaymentFailed(false);
     try{
@@ -188,11 +189,17 @@ function StudioApp(){
         method:'POST',
         credentials:'include',
         headers:{'Content-Type':'application/json','Accept':'application/json'},
-        body:JSON.stringify({provider}),
+        body:JSON.stringify({provider,...(method?{method}:{})}),
       });
-      const payload=await response.json().catch(()=>null) as {url?:unknown}|null;
+      const payload=await response.json().catch(()=>null) as {url?:unknown;payment_url?:unknown}|null;
       if(response.status===401)await refreshAuth();
-      if(!response.ok||!isAllowedPaymentUrl(payload?.url,provider))throw new Error('Payment checkout failed');
+      const checkoutUrl=provider==='anypay'?payload?.payment_url:payload?.url;
+      if(!response.ok||!isAllowedPaymentUrl(checkoutUrl,provider))throw new Error('Payment checkout failed');
+      if(provider==='anypay'){
+        setIsPaymentMenuOpen(false);
+        window.location.assign(checkoutUrl);
+        return;
+      }
       if(provider==='lemonsqueezy'){
         const lemonSqueezy=(window as LemonSqueezyWindow).LemonSqueezy;
         if(lemonSqueezy?.Url?.Open){
@@ -205,19 +212,18 @@ function StudioApp(){
                 }
               },
             });
-            lemonSqueezy.Url.Open(payload.url);
+            lemonSqueezy.Url.Open(checkoutUrl);
             setIsLemonCheckoutOpen(true);
             setIsPaymentMenuOpen(false);
             return;
           }catch{
-            window.location.href=payload.url;
+            window.location.href=checkoutUrl;
             return;
           }
         }
-        window.location.href=payload.url;
+        window.location.href=checkoutUrl;
         return;
       }
-      window.location.assign(payload.url);
     }catch{
       setPaymentFailed(true);
     }finally{
@@ -521,9 +527,13 @@ function StudioApp(){
             </button>
             {isPaymentMenuOpen&&<div className="payment-menu" id="premium-payment-menu" role="group" aria-label={copy.paymentCurrencyAria}>
               <div className="payment-menu-title">{copy.paymentCurrencyPrompt}</div>
-              <button type="button" className="payment-option" disabled={isPaymentPending} data-testid="button-pay-rubles" onClick={()=>void handlePaymentCheckout('aaio')}>
+              <button type="button" className="payment-option" disabled={isPaymentPending} data-testid="button-pay-rubles" onClick={()=>void handlePaymentCheckout('anypay','card')}>
                 <span className="payment-currency-mark" aria-hidden="true">₽</span>
-                <span>{copy.payInRubles}</span>
+                <span>{copy.payInRublesCard}</span>
+              </button>
+              <button type="button" className="payment-option" disabled={isPaymentPending} data-testid="button-pay-sbp" onClick={()=>void handlePaymentCheckout('anypay','sbp')}>
+                <span className="payment-currency-mark" aria-hidden="true">₽</span>
+                <span>{copy.payInRublesSbp}</span>
               </button>
               <button type="button" className="payment-option" disabled={isPaymentPending} data-testid="button-pay-usd" onClick={()=>void handlePaymentCheckout('lemonsqueezy')}>
                 <span className="payment-currency-mark" aria-hidden="true">$</span>

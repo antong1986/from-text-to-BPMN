@@ -1,13 +1,14 @@
-import { randomUUID } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import { Router, type IRouter } from "express";
 import { pool } from "@workspace/db";
 import {
-  confirmsAaioPaidOrder,
-  createAaioSignature,
-  isAaioPaidStatus,
-  isAaioPremiumAmount,
-  verifyAaioSignature,
-} from "../lib/aaio";
+  createAnyPayPaymentSignature,
+  isAnyPayPaidStatus,
+  isAnyPayPaymentUrl,
+  isAnyPayPremiumAmount,
+  parseAnyPayNotification,
+  verifyAnyPayNotificationSignature,
+} from "../lib/anypay";
 import {
   buildLemonSqueezyCheckoutPayload,
   isAllowedLemonSqueezyCheckoutUrl,
@@ -17,8 +18,7 @@ import {
 import type { AppUser } from "../types/app-user";
 
 const router: IRouter = Router();
-const AAIO_CREATE_ORDER_URL = "https://aaio.so/merchant/get_pay_url";
-const AAIO_ORDER_INFO_URL = "https://aaio.so/api/info-pay";
+const ANYPAY_CREATE_PAYMENT_URL = "https://anypay.io/api/create-payment";
 const LEMON_SQUEEZY_API_BASE = "https://api.lemonsqueezy.com/v1";
 const LEMON_SQUEEZY_PREMIUM_PRICE_CENTS = 999;
 const PREMIUM_AMOUNT = "990.00";
@@ -26,11 +26,10 @@ const PREMIUM_CURRENCY = "RUB";
 const PAYMENT_REQUEST_TIMEOUT_MS = 15_000;
 const LEMON_STORE_CACHE_MS = 30 * 60 * 1000;
 
-type AaioConfig = {
-  merchantId: string;
-  secret1: string;
-  secret2: string;
-  apiKey: string;
+type AnyPayConfig = {
+  apiId: string;
+  projectId: string;
+  secretKey: string;
 };
 
 type LemonSqueezyConfig = {
@@ -43,39 +42,28 @@ type LemonSqueezyWebhookConfig = {
   variantId: string;
 };
 
-type AaioApiResponse = {
-  type?: unknown;
-  url?: unknown;
-  id?: unknown;
-  merchant_id?: unknown;
-  order_id?: unknown;
-  amount?: unknown;
-  currency?: unknown;
-  status?: unknown;
+type AnyPayApiResponse = {
+  result?: unknown;
   message?: unknown;
+  error?: unknown;
 };
 
 type LemonSqueezyJsonApiResponse = {
   data?: unknown;
 };
 
-type PaymentNotification = {
-  merchant_id: string;
-  amount: string;
-  currency: string;
-  order_id: string;
-  sign: string;
-  status: string;
-  invoice_id: string | null;
-};
-
-function getAaioConfig(): AaioConfig | null {
-  const merchantId = process.env.AAIO_MERCHANT_ID?.trim();
-  const secret1 = process.env.AAIO_SECRET_1;
-  const secret2 = process.env.AAIO_SECRET_2;
-  const apiKey = process.env.AAIO_API_KEY;
-  if (!merchantId || !secret1 || !secret2 || !apiKey) return null;
-  return { merchantId, secret1, secret2, apiKey };
+function getAnyPayConfig(): AnyPayConfig | null {
+  const apiId = process.env.ANYPAY_API_ID?.trim();
+  const projectId = process.env.ANYPAY_PROJECT_ID?.trim();
+  const secretKey = process.env.ANYPAY_SECRET_KEY?.trim();
+  if (
+    !apiId || !/^\d+$/.test(apiId) ||
+    !projectId || !/^\d+$/.test(projectId) ||
+    !secretKey
+  ) {
+    return null;
+  }
+  return { apiId, projectId, secretKey };
 }
 
 function getLemonResourceId(value: unknown): string | null {
@@ -203,79 +191,12 @@ async function resolveLemonSqueezyStoreId(
   return storeId;
 }
 
-function parseNotification(body: unknown): PaymentNotification | null {
-  if (!body || typeof body !== "object" || Array.isArray(body)) return null;
-  const data = body as Record<string, unknown>;
-  const merchantId = getString(data.merchant_id, 100);
-  const amount = getString(data.amount, 32);
-  const currency = getString(data.currency, 3);
-  const orderId = getString(data.order_id, 64);
-  const signature = getString(data.sign, 128);
-  const status = getString(data.status, 32);
-  const invoiceId = getString(data.invoice_id, 64);
-  if (!merchantId || !amount || !currency || !orderId || !signature || !status) {
-    return null;
-  }
-  return {
-    merchant_id: merchantId,
-    amount,
-    currency,
-    order_id: orderId,
-    sign: signature,
-    status,
-    invoice_id: invoiceId,
-  };
-}
-
-function isAllowedAaioPaymentUrl(value: unknown): value is string {
-  if (typeof value !== "string") return false;
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:" &&
-      ["aaio.so", "aaio.io"].some((domain) =>
-        url.hostname === domain || url.hostname.endsWith(`.${domain}`),
-      );
-  } catch {
-    return false;
-  }
-}
-
-async function requestAaioOrderInfo(
-  config: AaioConfig,
-  orderId: string,
-): Promise<AaioApiResponse> {
-  const response = await fetch(AAIO_ORDER_INFO_URL, {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/x-www-form-urlencoded",
-      "X-Api-Key": config.apiKey,
-    },
-    body: new URLSearchParams({
-      merchant_id: config.merchantId,
-      order_id: orderId,
-    }),
-    signal: AbortSignal.timeout(PAYMENT_REQUEST_TIMEOUT_MS),
-  });
-  let payload: unknown;
-  try {
-    payload = await response.json();
-  } catch {
-    throw new Error(`AAIO info-pay returned non-JSON status ${response.status}`);
-  }
-  if (!response.ok || !payload || typeof payload !== "object") {
-    throw new Error(`AAIO info-pay failed with status ${response.status}`);
-  }
-  return payload as AaioApiResponse;
-}
-
 type FulfillmentResult = "paid" | "already-paid" | "not-found" | "not-pending";
 
 type LemonSqueezyFulfillmentResult = "paid" | "already-processed" | "user-not-found";
 
 async function grantPremiumForOrder(
   orderId: string,
-  invoiceId: string | null,
 ): Promise<FulfillmentResult> {
   const client = await pool.connect();
   try {
@@ -298,7 +219,7 @@ async function grantPremiumForOrder(
     }
     if (
       order.status !== "pending" ||
-      !isAaioPremiumAmount(order.amount) ||
+      !isAnyPayPremiumAmount(order.amount) ||
       order.currency !== PREMIUM_CURRENCY
     ) {
       await client.query("ROLLBACK");
@@ -318,9 +239,9 @@ async function grantPremiumForOrder(
 
     await client.query(
       `UPDATE payment_orders
-       SET status = 'paid', aaio_invoice_id = $2, paid_at = CURRENT_TIMESTAMP
+       SET status = 'paid', paid_at = CURRENT_TIMESTAMP
        WHERE order_id = $1`,
-      [orderId, invoiceId],
+      [orderId],
     );
     await client.query("COMMIT");
     return "paid";
@@ -389,8 +310,9 @@ router.post("/payment/create", async (req, res): Promise<void> => {
     res.status(401).json({ error: "Требуется авторизация." });
     return;
   }
-  const provider = req.body?.provider ?? "aaio";
-  if (provider !== "aaio" && provider !== "lemonsqueezy") {
+  const requestedProvider: unknown = req.body?.provider ?? "anypay";
+  const provider = requestedProvider === "rub" ? "anypay" : requestedProvider;
+  if (provider !== "anypay" && provider !== "lemonsqueezy") {
     res.status(400).json({ error: "Неизвестный способ оплаты." });
     return;
   }
@@ -443,23 +365,37 @@ router.post("/payment/create", async (req, res): Promise<void> => {
     return;
   }
 
-  const config = getAaioConfig();
+  const config = getAnyPayConfig();
   if (!config) {
     res.status(503).json({
-      error: "Приём платежей не настроен. Добавьте AAIO-переменные окружения.",
+      error: "AnyPay не настроен. Проверьте API ID, project ID и secret key.",
     });
     return;
   }
 
+  const method: unknown = req.body?.method ?? "card";
+  if (method !== "card" && method !== "sbp") {
+    res.status(400).json({ error: "Выберите оплату картой или через СБП." });
+    return;
+  }
+
   const user = req.user as AppUser;
-  const orderId = `BPMN-${Date.now()}-${randomUUID().replaceAll("-", "").slice(0, 12)}`;
-  const signature = createAaioSignature({
-    merchantId: config.merchantId,
+  const orderId = (
+    BigInt(`0x${randomBytes(8).toString("hex")}`) % 900_000_000_000_000n +
+    100_000_000_000_000n
+  ).toString();
+  const description = "Text-to-BPMN Premium на 30 дней";
+  const signature = createAnyPayPaymentSignature({
+    apiId: config.apiId,
+    projectId: config.projectId,
+    payId: orderId,
     amount: PREMIUM_AMOUNT,
     currency: PREMIUM_CURRENCY,
-    orderId,
-  }, config.secret1);
+    description,
+    method,
+  }, config.secretKey);
   let orderCreated = false;
+  let definitiveProviderFailure = false;
   try {
     await pool.query(
       `INSERT INTO payment_orders (order_id, user_id, amount, currency)
@@ -468,115 +404,127 @@ router.post("/payment/create", async (req, res): Promise<void> => {
     );
     orderCreated = true;
 
-    const body = new URLSearchParams({
-      merchant_id: config.merchantId,
+    const body = new FormData();
+    const fields: Record<string, string> = {
+      project_id: config.projectId,
+      pay_id: orderId,
       amount: PREMIUM_AMOUNT,
       currency: PREMIUM_CURRENCY,
-      order_id: orderId,
-      sign: signature,
-      desc: "Text-to-BPMN Premium на 30 дней",
+      desc: description,
       email: user.email,
+      method,
+      sign: signature,
       lang: "ru",
-      us_userId: String(user.id),
-    });
-    const response = await fetch(AAIO_CREATE_ORDER_URL, {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/x-www-form-urlencoded",
+    };
+    for (const [key, value] of Object.entries(fields)) body.set(key, value);
+
+    const response = await fetch(
+      `${ANYPAY_CREATE_PAYMENT_URL}/${encodeURIComponent(config.apiId)}`,
+      {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+        },
+        body,
+        signal: AbortSignal.timeout(PAYMENT_REQUEST_TIMEOUT_MS),
       },
-      body,
-      signal: AbortSignal.timeout(PAYMENT_REQUEST_TIMEOUT_MS),
-    });
+    );
+    definitiveProviderFailure =
+      response.status >= 400 && response.status < 500;
     let payload: unknown;
     try {
       payload = await response.json();
     } catch {
-      throw new Error(`AAIO get_pay_url returned non-JSON status ${response.status}`);
+      throw new Error(`AnyPay returned non-JSON status ${response.status}`);
     }
-    const result = payload as AaioApiResponse;
-    if (!response.ok || result?.type !== "success" || !isAllowedAaioPaymentUrl(result.url)) {
-      throw new Error(`AAIO could not create a payment URL (HTTP ${response.status})`);
+    const responseRecord = asRecord(payload);
+    const result = asRecord(responseRecord?.result);
+    const paymentUrl = result?.payment_url;
+    const responsePayId = result?.pay_id == null ? null : String(result.pay_id);
+    if (
+      !response.ok ||
+      responsePayId !== orderId ||
+      !isAnyPayPaymentUrl(paymentUrl)
+    ) {
+      const errorMessage = getString(responseRecord?.message, 300) ??
+        getString(responseRecord?.error, 300);
+      throw new Error(
+        errorMessage ?? `AnyPay could not create a payment URL (HTTP ${response.status})`,
+      );
     }
-    res.json({ url: result.url, orderId });
+    res.json({ payment_url: paymentUrl, orderId, provider: "anypay" });
   } catch (error) {
     req.log.error(
-      { orderId, userId: user.id, error: error instanceof Error ? error.message : String(error) },
-      "AAIO payment invoice creation failed",
+      {
+        orderId,
+        userId: user.id,
+        method,
+        error: error instanceof Error ? error.message : String(error),
+      },
+      "AnyPay payment invoice creation failed",
     );
-    if (orderCreated) {
+    if (orderCreated && definitiveProviderFailure) {
       await pool.query(
         `UPDATE payment_orders SET status = 'failed'
          WHERE order_id = $1 AND status = 'pending'`,
         [orderId],
       ).catch((dbError) => {
-        req.log.error({ orderId, error: dbError }, "Could not mark failed AAIO payment order");
+        req.log.error({ orderId, error: dbError }, "Could not mark failed AnyPay payment order");
       });
     }
-    res.status(502).json({ error: "Не удалось создать счёт AAIO. Попробуйте позже." });
+    res.status(502).json({ error: "Не удалось создать счёт AnyPay. Попробуйте позже." });
   }
 });
 
 router.post("/payment/webhook", async (req, res): Promise<void> => {
-  const config = getAaioConfig();
+  const config = getAnyPayConfig();
   if (!config) {
-    req.log.error("AAIO webhook received while payment configuration is missing");
+    req.log.error("AnyPay webhook received while payment configuration is missing");
     res.status(503).type("text/plain").send("Payment integration is not configured");
     return;
   }
-  const notification = parseNotification(req.body);
+  const notification = parseAnyPayNotification(req.body);
   if (!notification) {
     res.status(400).type("text/plain").send("Invalid notification");
     return;
   }
   if (
-    notification.merchant_id !== config.merchantId ||
-    notification.currency !== PREMIUM_CURRENCY ||
-    !isAaioPremiumAmount(notification.amount) ||
-    !verifyAaioSignature({
-      merchantId: notification.merchant_id,
-      amount: notification.amount,
-      currency: notification.currency,
-      orderId: notification.order_id,
-    }, notification.sign, config.secret2)
+    notification.projectId !== config.projectId ||
+    notification.currency.toUpperCase() !== PREMIUM_CURRENCY ||
+    !isAnyPayPremiumAmount(notification.amount) ||
+    !verifyAnyPayNotificationSignature(notification, config.secretKey)
   ) {
     req.log.warn(
-      { orderId: notification.order_id },
-      "Rejected invalid AAIO payment notification",
+      { orderId: notification.payId },
+      "Rejected invalid AnyPay payment notification",
     );
-    res.status(403).type("text/plain").send("Invalid payment signature or details");
+    res.status(401).type("text/plain").send("Invalid payment signature or details");
     return;
   }
 
-  if (!isAaioPaidStatus(notification.status)) {
+  if (!isAnyPayPaidStatus(notification.status)) {
     sendWebhookOk(res);
     return;
   }
 
   try {
-    const confirmation = await requestAaioOrderInfo(config, notification.order_id);
-    if (!confirmsAaioPaidOrder(confirmation, config.merchantId, notification.order_id)) {
-      req.log.warn(
-        { orderId: notification.order_id, providerStatus: confirmation.status },
-        "AAIO info-pay did not confirm the paid order",
-      );
-      res.status(403).type("text/plain").send("Payment not confirmed");
-      return;
-    }
-    const result = await grantPremiumForOrder(
-      notification.order_id,
-      notification.invoice_id ?? getString(confirmation.id, 64),
-    );
+    const result = await grantPremiumForOrder(notification.payId);
     if (result === "not-found" || result === "not-pending") {
-      req.log.warn({ orderId: notification.order_id, result }, "AAIO payment has no pending local order");
+      req.log.warn(
+        { orderId: notification.payId, result },
+        "AnyPay payment has no pending local order",
+      );
       res.status(404).type("text/plain").send("Order not found");
       return;
     }
     sendWebhookOk(res);
   } catch (error) {
     req.log.error(
-      { orderId: notification.order_id, error: error instanceof Error ? error.message : String(error) },
-      "AAIO payment webhook processing failed",
+      {
+        orderId: notification.payId,
+        error: error instanceof Error ? error.message : String(error),
+      },
+      "AnyPay payment webhook processing failed",
     );
     res.status(503).type("text/plain").send("Temporary payment processing error");
   }

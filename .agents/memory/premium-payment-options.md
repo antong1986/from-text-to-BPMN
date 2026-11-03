@@ -3,8 +3,8 @@ name: Premium payment options
 description: Regional payment methods and Premium price/term chosen for Text-to-BPMN.
 ---
 
-Keep AAIO available for ruble payments and Russian bank cards, and offer Lemon Squeezy as a parallel dollar payment method for international customers. A successful purchase grants 30 days of Premium.
+Use AnyPay for 990 RUB payments by Russian bank card or SBP, and keep Lemon Squeezy for $9.99 USD international payments. A successful purchase grants 30 days of Premium.
 
-**Why:** The user explicitly chose to keep AAIO while adding a $9.99 USD option for international customers, and specified that the UI should ask users for currency rather than payment platform.
+**Why:** The user explicitly replaced AAIO with AnyPay for Russian ruble payments while keeping Lemon Squeezy for international USD payments.
 
-**How to apply:** Add or modify payment flows without replacing either provider; keep the configured Lemon Squeezy variant priced at $9.99 USD and each successful provider payment tied to a 30-day Premium grant. In the UI, offer RUB or USD and keep provider names internal.
+**How to apply:** Keep AnyPay card and SBP choices for RUB and Lemon Squeezy for USD; grant 30 days of Premium after verified payment. Show currency and payment method choices without exposing provider names.

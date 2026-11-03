@@ -5,16 +5,18 @@ import {
   ensurePaymentOrdersTable,
 } from "../src/lib/payment-orders.ts";
 
-test("creates an idempotent payment orders table and user index", async () => {
+test("creates payment orders, safely renames the legacy provider column, and indexes users", async () => {
   const statements = [];
   await ensurePaymentOrdersTable(async (sql) => statements.push(sql));
 
-  assert.equal(statements.length, 2);
+  assert.equal(statements.length, 3);
   assert.match(statements[0], /CREATE TABLE IF NOT EXISTS "payment_orders"/);
   assert.match(statements[0], /"order_id" VARCHAR\(64\) PRIMARY KEY/);
   assert.match(statements[0], /REFERENCES users\(id\) ON DELETE CASCADE/);
   assert.match(statements[0], /'pending', 'paid', 'failed'/);
-  assert.match(statements[1], /CREATE INDEX IF NOT EXISTS "IDX_payment_orders_user_id"/);
+  assert.match(statements[0], /"provider_reference" VARCHAR\(128\)/);
+  assert.match(statements[1], /RENAME COLUMN "aaio_invoice_id" TO "provider_reference"/);
+  assert.match(statements[2], /CREATE INDEX IF NOT EXISTS "IDX_payment_orders_user_id"/);
 });
 
 test("creates an idempotency table for Lemon Squeezy orders", async () => {

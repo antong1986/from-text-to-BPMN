@@ -60,7 +60,8 @@ export interface StudioCopy {
   buyPremium: string;
   paymentCurrencyPrompt: string;
   paymentCurrencyAria: string;
-  payInRubles: string;
+  payInRublesCard: string;
+  payInRublesSbp: string;
   payInUsd: string;
   paymentCreating: string;
   paymentError: string;
@@ -172,7 +173,8 @@ const english: StudioCopy = {
   buyPremium: 'Buy Premium',
   paymentCurrencyPrompt: 'Choose a currency',
   paymentCurrencyAria: 'Choose payment currency',
-  payInRubles: 'Pay in rubles · 990 ₽',
+  payInRublesCard: 'Russian bank card · 990 ₽',
+  payInRublesSbp: 'Pay with SBP · 990 ₽',
   payInUsd: 'Pay in USD · $9.99',
   paymentCreating: 'Opening checkout…',
   paymentError: 'Could not open checkout. Please try again.',
@@ -284,7 +286,8 @@ const russian: StudioCopy = {
   buyPremium: 'Купить Premium',
   paymentCurrencyPrompt: 'Выберите валюту оплаты',
   paymentCurrencyAria: 'Выбор валюты оплаты',
-  payInRubles: 'Оплатить в рублях · 990 ₽',
+  payInRublesCard: 'Оплатить картой РФ · 990 ₽',
+  payInRublesSbp: 'Оплатить через СБП · 990 ₽',
   payInUsd: 'Оплатить в иностранной валюте · $9.99 USD',
   paymentCreating: 'Открываю оплату…',
   paymentError: 'Не удалось перейти к оплате. Попробуйте ещё раз.',
