@@ -36,7 +36,7 @@ type AuthStatus={
   };
 };
 type PaymentProvider='anypay'|'lemonsqueezy';
-type AnyPayMethod='card'|'sbp';
+type AnyPayMethod='sbp';
 type LemonSqueezyWindow=Window&{
   LemonSqueezy?:{
     Setup?:(options:{eventHandler:(event:unknown)=>void})=>void;
@@ -534,10 +534,6 @@ function StudioApp(){
             </button>
             {isPaymentMenuOpen&&<div className="payment-menu" id="premium-payment-menu" role="group" aria-label={copy.paymentCurrencyAria}>
               <div className="payment-menu-title">{copy.paymentCurrencyPrompt}</div>
-              <button type="button" className="payment-option" disabled={isPaymentPending} data-testid="button-pay-rubles" onClick={()=>void handlePaymentCheckout('anypay','card')}>
-                <span className="payment-currency-mark" aria-hidden="true">₽</span>
-                <span>{copy.payInRublesCard}</span>
-              </button>
               <button type="button" className="payment-option" disabled={isPaymentPending} data-testid="button-pay-sbp" onClick={()=>void handlePaymentCheckout('anypay','sbp')}>
                 <span className="payment-currency-mark" aria-hidden="true">₽</span>
                 <span>{copy.payInRublesSbp}</span>
