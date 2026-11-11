@@ -317,6 +317,23 @@ router.post("/payment/create", async (req, res): Promise<void> => {
   if (provider === "lemonsqueezy") {
     const lemonConfig = getLemonSqueezyConfig();
     if (!lemonConfig) {
+      const environmentDiagnostics = {
+        provider,
+        lemonSqueezyApiKeyPresent: Boolean(
+          process.env.LEMON_SQUEEZY_API_KEY?.trim(),
+        ),
+        lemonSqueezyVariantIdPresent: Boolean(
+          process.env.LEMON_SQUEEZY_VARIANT_ID?.trim(),
+        ),
+        lemonSqueezyVariantIdNumeric: /^\d+$/.test(
+          process.env.LEMON_SQUEEZY_VARIANT_ID?.trim() ?? "",
+        ),
+      };
+      console.error("[Payment configuration missing]", environmentDiagnostics);
+      req.log.error(
+        environmentDiagnostics,
+        "Lemon Squeezy payment configuration is missing or invalid",
+      );
       res.status(503).json({
         error: "Lemon Squeezy не настроен. Проверьте API key и variant ID.",
       });
@@ -364,6 +381,22 @@ router.post("/payment/create", async (req, res): Promise<void> => {
 
   const config = getAnyPayConfig();
   if (!config) {
+    const apiId = process.env.ANYPAY_API_ID?.trim() ?? "";
+    const projectId = process.env.ANYPAY_PROJECT_ID?.trim() ?? "";
+    const environmentDiagnostics = {
+      provider,
+      anypayApiIdPresent: Boolean(apiId),
+      anypayApiIdNumeric: /^\d+$/.test(apiId),
+      anypayProjectIdPresent: Boolean(projectId),
+      anypayProjectIdNumeric: /^\d+$/.test(projectId),
+      anypaySecretKeyPresent: Boolean(process.env.ANYPAY_SECRET_KEY?.trim()),
+      anypayApiKeyPresent: Boolean(process.env.ANYPAY_API_KEY?.trim()),
+    };
+    console.error("[Payment configuration missing]", environmentDiagnostics);
+    req.log.error(
+      environmentDiagnostics,
+      "AnyPay payment configuration is missing or invalid",
+    );
     res.status(503).json({
       error: "AnyPay не настроен. Проверьте API ID, project ID и secret key.",
       details: "Set ANYPAY_API_ID, ANYPAY_PROJECT_ID, and ANYPAY_SECRET_KEY (or ANYPAY_API_KEY) in the server environment.",
