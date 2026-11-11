@@ -120,6 +120,14 @@ test("extracts useful AnyPay API errors without exposing credential fields", () 
     "Invalid signature",
   );
   assert.equal(
+    getAnyPayErrorMessage(
+      { message: "Invalid api_key=top-secret" },
+      "",
+      400,
+    ),
+    "Invalid api_key=[REDACTED]",
+  );
+  assert.equal(
     getAnyPayErrorMessage(null, "method is not enabled", 403),
     "method is not enabled",
   );

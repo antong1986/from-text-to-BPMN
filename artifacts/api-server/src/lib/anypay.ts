@@ -126,7 +126,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function errorText(value: unknown): string | null {
   if (typeof value !== "string") return null;
-  const normalized = value.replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim();
+  const normalized = redactAnyPayResponseText(value)
+    .replace(/<[^>]*>/g, " ")
+    .replace(/[\u0000-\u001f\u007f]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
   return normalized.length > 0 ? normalized.slice(0, 600) : null;
 }
 
