@@ -21,7 +21,7 @@ export type AnyPayNotification = {
 
 export function createAnyPayPaymentSignature(
   fields: AnyPayCreatePaymentFields,
-  secretKey: string,
+  apiKey: string,
 ): string {
   return createHash("sha256")
     .update([
@@ -33,7 +33,7 @@ export function createAnyPayPaymentSignature(
       fields.currency,
       fields.description,
       fields.method,
-      secretKey,
+      apiKey,
     ].join(""))
     .digest("hex");
 }

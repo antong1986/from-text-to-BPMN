@@ -23,11 +23,11 @@ const paymentFields = {
   method: "card",
 };
 
-test("creates AnyPay payment signature using API_ID and documented concatenation order", () => {
-  const signature = createAnyPayPaymentSignature(paymentFields, "api-secret");
+test("creates AnyPay payment signature with API_ID and global API_KEY in documented order", () => {
+  const signature = createAnyPayPaymentSignature(paymentFields, "global-api-key");
   const expected = createHash("sha256")
     .update(
-      "create-paymentapi-1231399172000000000123990.00RUBText-to-BPMN Premium на 30 днейcardapi-secret",
+      "create-paymentapi-1231399172000000000123990.00RUBText-to-BPMN Premium на 30 днейcardglobal-api-key",
     )
     .digest("hex");
   assert.equal(signature, expected);
@@ -41,20 +41,20 @@ test("validates AnyPay notifications with the documented colon-delimited signatu
     currency: "RUB",
     status: "paid",
   };
-  const sign = createAnyPayNotificationSignature(notification, "api-secret");
+  const sign = createAnyPayNotificationSignature(notification, "project-secret");
   assert.equal(
     sign,
     createHash("sha256").update(
-      "RUB:990.00:172000000000123:1399:paid:api-secret",
+      "RUB:990.00:172000000000123:1399:paid:project-secret",
     ).digest("hex"),
   );
-  assert.equal(verifyAnyPayNotificationSignature({ ...notification, sign }, "api-secret"), true);
+  assert.equal(verifyAnyPayNotificationSignature({ ...notification, sign }, "project-secret"), true);
   assert.equal(
-    verifyAnyPayNotificationSignature({ ...notification, amount: "990.01", sign }, "api-secret"),
+    verifyAnyPayNotificationSignature({ ...notification, amount: "990.01", sign }, "project-secret"),
     false,
   );
   assert.equal(verifyAnyPayNotificationSignature({ ...notification, sign }, "wrong-secret"), false);
-  assert.equal(verifyAnyPayNotificationSignature({ ...notification, sign: "invalid" }, "api-secret"), false);
+  assert.equal(verifyAnyPayNotificationSignature({ ...notification, sign: "invalid" }, "project-secret"), false);
 });
 
 test("parses a signed notification and rejects invalid order IDs", () => {
@@ -64,7 +64,7 @@ test("parses a signed notification and rejects invalid order IDs", () => {
     amount: "990.00",
     currency: "RUB",
     status: "paid",
-  }, "api-secret");
+  }, "project-secret");
   assert.deepEqual(
     parseAnyPayNotification({
       merchant_id: 1399,

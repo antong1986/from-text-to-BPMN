@@ -28,8 +28,13 @@ const PREMIUM_CURRENCY = "RUB";
 const PAYMENT_REQUEST_TIMEOUT_MS = 15_000;
 const LEMON_STORE_CACHE_MS = 30 * 60 * 1000;
 
-type AnyPayConfig = {
+type AnyPayCreatePaymentConfig = {
   apiId: string;
+  projectId: string;
+  apiKey: string;
+};
+
+type AnyPayWebhookConfig = {
   projectId: string;
   secretKey: string;
 };
@@ -48,19 +53,25 @@ type LemonSqueezyJsonApiResponse = {
   data?: unknown;
 };
 
-function getAnyPayConfig(): AnyPayConfig | null {
+function getAnyPayCreatePaymentConfig(): AnyPayCreatePaymentConfig | null {
   const apiId = process.env.ANYPAY_API_ID?.trim();
   const projectId = process.env.ANYPAY_PROJECT_ID?.trim();
-  const secretKey = process.env.ANYPAY_SECRET_KEY?.trim() ||
-    process.env.ANYPAY_API_KEY?.trim();
+  const apiKey = process.env.ANYPAY_API_KEY?.trim();
   if (
     !apiId ||
     !projectId || !/^\d+$/.test(projectId) ||
-    !secretKey
+    !apiKey
   ) {
     return null;
   }
-  return { apiId, projectId, secretKey };
+  return { apiId, projectId, apiKey };
+}
+
+function getAnyPayWebhookConfig(): AnyPayWebhookConfig | null {
+  const projectId = process.env.ANYPAY_PROJECT_ID?.trim();
+  const secretKey = process.env.ANYPAY_SECRET_KEY?.trim();
+  if (!projectId || !/^\d+$/.test(projectId) || !secretKey) return null;
+  return { projectId, secretKey };
 }
 
 function getLemonResourceId(value: unknown): string | null {
@@ -379,7 +390,7 @@ router.post("/payment/create", async (req, res): Promise<void> => {
     return;
   }
 
-  const config = getAnyPayConfig();
+  const config = getAnyPayCreatePaymentConfig();
   if (!config) {
     const apiId = process.env.ANYPAY_API_ID?.trim() ?? "";
     const projectId = process.env.ANYPAY_PROJECT_ID?.trim() ?? "";
@@ -388,7 +399,6 @@ router.post("/payment/create", async (req, res): Promise<void> => {
       anypayApiIdPresent: Boolean(apiId),
       anypayProjectIdPresent: Boolean(projectId),
       anypayProjectIdNumeric: /^\d+$/.test(projectId),
-      anypaySecretKeyPresent: Boolean(process.env.ANYPAY_SECRET_KEY?.trim()),
       anypayApiKeyPresent: Boolean(process.env.ANYPAY_API_KEY?.trim()),
     };
     console.error("[Payment configuration missing]", environmentDiagnostics);
@@ -397,8 +407,8 @@ router.post("/payment/create", async (req, res): Promise<void> => {
       "AnyPay payment configuration is missing or invalid",
     );
     res.status(503).json({
-      error: "AnyPay не настроен. Проверьте API ID, project ID и secret key.",
-      details: "Set ANYPAY_API_ID, ANYPAY_PROJECT_ID, and ANYPAY_SECRET_KEY (or ANYPAY_API_KEY) in the server environment.",
+      error: "AnyPay не настроен. Проверьте API ID, project ID и API key.",
+      details: "Set ANYPAY_API_ID, ANYPAY_PROJECT_ID, and ANYPAY_API_KEY in the server environment.",
     });
     return;
   }
@@ -423,7 +433,7 @@ router.post("/payment/create", async (req, res): Promise<void> => {
     currency: PREMIUM_CURRENCY,
     description,
     method,
-  }, config.secretKey);
+  }, config.apiKey);
   let orderCreated = false;
   let definitiveProviderFailure = false;
   let providerStatus: number | null = null;
@@ -540,7 +550,7 @@ router.post("/payment/create", async (req, res): Promise<void> => {
 });
 
 router.post("/payment/webhook", async (req, res): Promise<void> => {
-  const config = getAnyPayConfig();
+  const config = getAnyPayWebhookConfig();
   if (!config) {
     req.log.error("AnyPay webhook received while payment configuration is missing");
     res.status(503).type("text/plain").send("Payment integration is not configured");
