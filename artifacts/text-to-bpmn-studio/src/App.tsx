@@ -138,6 +138,7 @@ function StudioApp(){
   const [isPaymentPending,setIsPaymentPending]=useState(false);
   const [isLemonCheckoutOpen,setIsLemonCheckoutOpen]=useState(false);
   const [paymentFailed,setPaymentFailed]=useState(false);
+  const [paymentErrorMessage,setPaymentErrorMessage]=useState('');
   const [rollbackSnapshot,setRollbackSnapshot]=useState<DiagramSnapshot|null>(null);
   const [asideWidth,setAsideWidth]=useState(410);
   const [isResizing,setIsResizing]=useState(false);
@@ -183,7 +184,7 @@ function StudioApp(){
   };
   const handlePaymentCheckout=async(provider:PaymentProvider,method?:AnyPayMethod)=>{
     if(authStatus?.authenticated!==true||!authStatus.user||isPaymentPending)return;
-    setIsPaymentPending(true);setPaymentFailed(false);
+    setIsPaymentPending(true);setPaymentFailed(false);setPaymentErrorMessage('');
     try{
       const response=await fetch(getApiUrl('/api/payment/create'),{
         method:'POST',
@@ -191,10 +192,14 @@ function StudioApp(){
         headers:{'Content-Type':'application/json','Accept':'application/json'},
         body:JSON.stringify({provider,...(method?{method}:{})}),
       });
-      const payload=await response.json().catch(()=>null) as {url?:unknown;payment_url?:unknown}|null;
+      const payload=await response.json().catch(()=>null) as {url?:unknown;payment_url?:unknown;error?:unknown;details?:unknown}|null;
       if(response.status===401)await refreshAuth();
       const checkoutUrl=provider==='anypay'?payload?.payment_url:payload?.url;
-      if(!response.ok||!isAllowedPaymentUrl(checkoutUrl,provider))throw new Error('Payment checkout failed');
+      if(!response.ok){
+        const detail=typeof payload?.details==='string'?payload.details:typeof payload?.error==='string'?payload.error:'';
+        throw new Error(detail||copy.paymentError);
+      }
+      if(!isAllowedPaymentUrl(checkoutUrl,provider))throw new Error(copy.paymentError);
       if(provider==='anypay'){
         setIsPaymentMenuOpen(false);
         window.location.assign(checkoutUrl);
@@ -224,7 +229,8 @@ function StudioApp(){
         window.location.href=checkoutUrl;
         return;
       }
-    }catch{
+    }catch(error){
+      setPaymentErrorMessage(error instanceof Error?error.message:copy.paymentError);
       setPaymentFailed(true);
     }finally{
       setIsPaymentPending(false);
@@ -520,6 +526,7 @@ function StudioApp(){
               data-testid="button-premium-payment"
               onClick={()=>{
                 setPaymentFailed(false);
+                setPaymentErrorMessage('');
                 setIsPaymentMenuOpen(open=>!open);
               }}
             >
@@ -539,7 +546,7 @@ function StudioApp(){
                 <span className="payment-currency-mark" aria-hidden="true">$</span>
                 <span>{copy.payInUsd}</span>
               </button>
-              {paymentFailed&&<div className="payment-error" role="alert" data-testid="status-payment-error">{copy.paymentError}</div>}
+              {paymentFailed&&<div className="payment-error" role="alert" data-testid="status-payment-error">{paymentErrorMessage||copy.paymentError}</div>}
             </div>}
           </div>}
           <div className={`auth-bar${signedInUser?' is-authenticated':''}`} data-testid="auth-status">

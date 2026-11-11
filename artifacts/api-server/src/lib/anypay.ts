@@ -119,3 +119,72 @@ export function parseAnyPayNotification(body: unknown): AnyPayNotification | nul
 export function isAnyPayPaidStatus(value: unknown): value is "paid" {
   return value === "paid";
 }
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function errorText(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim();
+  return normalized.length > 0 ? normalized.slice(0, 600) : null;
+}
+
+export function getAnyPayErrorMessage(
+  payload: unknown,
+  rawBody: string,
+  status: number,
+): string {
+  const root = isRecord(payload) ? payload : null;
+  const nestedError = isRecord(root?.error) ? root.error : null;
+  const result = isRecord(root?.result) ? root.result : null;
+  const errors = Array.isArray(root?.errors) ? root.errors : [];
+  const firstValidationError = errors.map((entry) => {
+    if (typeof entry === "string") return entry;
+    if (!isRecord(entry)) return null;
+    return entry.message ?? entry.description ?? entry.error;
+  }).find((entry) => typeof entry === "string");
+  const candidates = [
+    root?.message,
+    root?.description,
+    root?.error_description,
+    root?.error,
+    nestedError?.message,
+    nestedError?.description,
+    nestedError?.error,
+    result?.message,
+    result?.error,
+    firstValidationError,
+  ];
+  for (const candidate of candidates) {
+    const message = errorText(candidate);
+    if (message) return message;
+  }
+
+  const errorCode = [root?.code, root?.error_code, nestedError?.code]
+    .find((value) => typeof value === "string" || typeof value === "number");
+  const safeRawBody = redactAnyPayResponseText(rawBody)
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (safeRawBody) {
+    const prefix = errorCode === undefined ? "" : `AnyPay error ${errorCode}: `;
+    return `${prefix}${safeRawBody}`.slice(0, 600);
+  }
+  return errorCode === undefined
+    ? `AnyPay returned HTTP ${status}`
+    : `AnyPay error ${errorCode} (HTTP ${status})`;
+}
+
+export function redactAnyPayResponseText(value: string): string {
+  return value
+    .replace(
+      /("(?:sign|secret(?:_key)?|api[_-]?key|authorization)"\s*:\s*")[^"]*"/gi,
+      '$1[REDACTED]"',
+    )
+    .replace(
+      /((?:sign|secret(?:_key)?|api[_-]?key|authorization)\s*[=:]\s*)[^&\s,}]+/gi,
+      "$1[REDACTED]",
+    )
+    .slice(0, 2_000);
+}

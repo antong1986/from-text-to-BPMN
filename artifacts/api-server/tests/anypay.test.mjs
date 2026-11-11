@@ -4,10 +4,12 @@ import { createHash } from "node:crypto";
 import {
   createAnyPayNotificationSignature,
   createAnyPayPaymentSignature,
+  getAnyPayErrorMessage,
   isAnyPayPaidStatus,
   isAnyPayPaymentUrl,
   isAnyPayPremiumAmount,
   parseAnyPayNotification,
+  redactAnyPayResponseText,
   verifyAnyPayNotificationSignature,
 } from "../src/lib/anypay.ts";
 
@@ -106,4 +108,23 @@ test("accepts only the configured RUB premium price and official payment domain"
   assert.equal(isAnyPayPaymentUrl("https://sub.anypay.io/pay/example"), true);
   assert.equal(isAnyPayPaymentUrl("https://anypay.io.attacker.example/pay"), false);
   assert.equal(isAnyPayPaymentUrl("http://anypay.io/pay/example"), false);
+});
+
+test("extracts useful AnyPay API errors without exposing credential fields", () => {
+  assert.equal(
+    getAnyPayErrorMessage(
+      { error: { message: "Invalid signature" } },
+      '{"error":{"message":"Invalid signature"}}',
+      400,
+    ),
+    "Invalid signature",
+  );
+  assert.equal(
+    getAnyPayErrorMessage(null, "method is not enabled", 403),
+    "method is not enabled",
+  );
+  assert.equal(
+    redactAnyPayResponseText('{"message":"no","sign":"private","api_key":"secret"}'),
+    '{"message":"no","sign":"[REDACTED]","api_key":"[REDACTED]"}',
+  );
 });

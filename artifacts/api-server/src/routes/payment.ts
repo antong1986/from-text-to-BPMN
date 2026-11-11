@@ -3,10 +3,12 @@ import { Router, type IRouter } from "express";
 import { pool } from "@workspace/db";
 import {
   createAnyPayPaymentSignature,
+  getAnyPayErrorMessage,
   isAnyPayPaidStatus,
   isAnyPayPaymentUrl,
   isAnyPayPremiumAmount,
   parseAnyPayNotification,
+  redactAnyPayResponseText,
   verifyAnyPayNotificationSignature,
 } from "../lib/anypay";
 import {
@@ -42,12 +44,6 @@ type LemonSqueezyWebhookConfig = {
   variantId: string;
 };
 
-type AnyPayApiResponse = {
-  result?: unknown;
-  message?: unknown;
-  error?: unknown;
-};
-
 type LemonSqueezyJsonApiResponse = {
   data?: unknown;
 };
@@ -55,7 +51,8 @@ type LemonSqueezyJsonApiResponse = {
 function getAnyPayConfig(): AnyPayConfig | null {
   const apiId = process.env.ANYPAY_API_ID?.trim();
   const projectId = process.env.ANYPAY_PROJECT_ID?.trim();
-  const secretKey = process.env.ANYPAY_SECRET_KEY?.trim();
+  const secretKey = process.env.ANYPAY_SECRET_KEY?.trim() ||
+    process.env.ANYPAY_API_KEY?.trim();
   if (
     !apiId || !/^\d+$/.test(apiId) ||
     !projectId || !/^\d+$/.test(projectId) ||
@@ -369,6 +366,7 @@ router.post("/payment/create", async (req, res): Promise<void> => {
   if (!config) {
     res.status(503).json({
       error: "AnyPay не настроен. Проверьте API ID, project ID и secret key.",
+      details: "Set ANYPAY_API_ID, ANYPAY_PROJECT_ID, and ANYPAY_SECRET_KEY (or ANYPAY_API_KEY) in the server environment.",
     });
     return;
   }
@@ -396,6 +394,10 @@ router.post("/payment/create", async (req, res): Promise<void> => {
   }, config.secretKey);
   let orderCreated = false;
   let definitiveProviderFailure = false;
+  let providerStatus: number | null = null;
+  let providerErrorDetail: string | null = null;
+  let providerResponseBody = "";
+  let requestStarted = false;
   try {
     await pool.query(
       `INSERT INTO payment_orders (order_id, user_id, amount, currency)
@@ -418,6 +420,7 @@ router.post("/payment/create", async (req, res): Promise<void> => {
     };
     for (const [key, value] of Object.entries(fields)) body.set(key, value);
 
+    requestStarted = true;
     const response = await fetch(
       `${ANYPAY_CREATE_PAYMENT_URL}/${encodeURIComponent(config.apiId)}`,
       {
@@ -429,13 +432,17 @@ router.post("/payment/create", async (req, res): Promise<void> => {
         signal: AbortSignal.timeout(PAYMENT_REQUEST_TIMEOUT_MS),
       },
     );
+    providerStatus = response.status;
     definitiveProviderFailure =
       response.status >= 400 && response.status < 500;
+    const rawBody = await response.text();
+    providerResponseBody = redactAnyPayResponseText(rawBody);
     let payload: unknown;
     try {
-      payload = await response.json();
+      payload = JSON.parse(rawBody);
     } catch {
-      throw new Error(`AnyPay returned non-JSON status ${response.status}`);
+      providerErrorDetail = getAnyPayErrorMessage(null, rawBody, response.status);
+      throw new Error(providerErrorDetail);
     }
     const responseRecord = asRecord(payload);
     const result = asRecord(responseRecord?.result);
@@ -446,21 +453,34 @@ router.post("/payment/create", async (req, res): Promise<void> => {
       responsePayId !== orderId ||
       !isAnyPayPaymentUrl(paymentUrl)
     ) {
-      const errorMessage = getString(responseRecord?.message, 300) ??
-        getString(responseRecord?.error, 300);
-      throw new Error(
-        errorMessage ?? `AnyPay could not create a payment URL (HTTP ${response.status})`,
-      );
+      providerErrorDetail = getAnyPayErrorMessage(payload, rawBody, response.status);
+      if (response.ok) {
+        providerErrorDetail =
+          `Invalid AnyPay checkout response (missing or mismatched payment URL/order ID): ${providerErrorDetail}`;
+      }
+      throw new Error(providerErrorDetail);
     }
     res.json({ payment_url: paymentUrl, orderId, provider: "anypay" });
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const safeTransportDetail = requestStarted && providerStatus === null
+      ? error instanceof Error && error.name === "TimeoutError"
+        ? "Timed out waiting for AnyPay to respond."
+        : "Could not reach the AnyPay API."
+      : null;
+    const returnedDetail = providerErrorDetail ?? safeTransportDetail;
+    const diagnostic = {
+      orderId,
+      userId: user.id,
+      method,
+      providerStatus,
+      providerError: returnedDetail,
+      responseBody: providerResponseBody,
+      error: errorMessage,
+    };
+    console.error("[AnyPay checkout creation failed]", diagnostic);
     req.log.error(
-      {
-        orderId,
-        userId: user.id,
-        method,
-        error: error instanceof Error ? error.message : String(error),
-      },
+      diagnostic,
       "AnyPay payment invoice creation failed",
     );
     if (orderCreated && definitiveProviderFailure) {
@@ -472,7 +492,18 @@ router.post("/payment/create", async (req, res): Promise<void> => {
         req.log.error({ orderId, error: dbError }, "Could not mark failed AnyPay payment order");
       });
     }
-    res.status(502).json({ error: "Не удалось создать счёт AnyPay. Попробуйте позже." });
+    const statusCode = providerStatus !== null && providerStatus >= 400 &&
+        providerStatus < 500
+      ? 400
+      : providerStatus === null && !requestStarted
+        ? 500
+        : 502;
+    const errorText = returnedDetail ??
+      "Не удалось создать счёт AnyPay. Проверьте серверные логи.";
+    res.status(statusCode).json({
+      error: errorText,
+      ...(returnedDetail ? { details: returnedDetail } : {}),
+    });
   }
 });
 
