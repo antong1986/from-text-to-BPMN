@@ -54,7 +54,7 @@ function getAnyPayConfig(): AnyPayConfig | null {
   const secretKey = process.env.ANYPAY_SECRET_KEY?.trim() ||
     process.env.ANYPAY_API_KEY?.trim();
   if (
-    !apiId || !/^\d+$/.test(apiId) ||
+    !apiId ||
     !projectId || !/^\d+$/.test(projectId) ||
     !secretKey
   ) {
@@ -386,7 +386,6 @@ router.post("/payment/create", async (req, res): Promise<void> => {
     const environmentDiagnostics = {
       provider,
       anypayApiIdPresent: Boolean(apiId),
-      anypayApiIdNumeric: /^\d+$/.test(apiId),
       anypayProjectIdPresent: Boolean(projectId),
       anypayProjectIdNumeric: /^\d+$/.test(projectId),
       anypaySecretKeyPresent: Boolean(process.env.ANYPAY_SECRET_KEY?.trim()),
