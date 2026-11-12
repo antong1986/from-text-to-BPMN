@@ -3,6 +3,7 @@ import cors from "cors";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import { registerPingRoutes } from "./lib/ping";
 import { configureAuth } from "./lib/auth";
 import { getCorsAllowedOrigins } from "./lib/cross-origin-auth";
 
@@ -28,6 +29,9 @@ app.use(
     },
   }),
 );
+
+registerPingRoutes(app);
+
 const allowedOrigins = getCorsAllowedOrigins();
 app.use(cors({
   origin(origin, callback) {
